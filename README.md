@@ -35,51 +35,51 @@ Prefer a double-click? [brainos.bat](brainos.bat) (Windows) and
 it answers, and reuse an already-running instance instead of starting a second
 one. The server runs in that window — Ctrl+C or closing it stops the server.
 
-## First-time setup, step by step
+## First-time setup
 
-Everything up to step 4 works fully offline and needs no accounts or API keys.
+Three steps, all offline — no accounts, no API keys, nothing to install.
 
-**1. Install Node 20 or newer.** Grab it from [nodejs.org](https://nodejs.org)
-(or your version manager of choice), then confirm:
+**1. Install Node.js** — version 20 or newer, from
+[nodejs.org](https://nodejs.org).
 
-```
-node -v      # must print v20.x or higher
-```
+**2. Download BrainOS** — on the
+[GitHub page](https://github.com/cfirz/BrainOS), click **Code → Download ZIP**
+and unzip it anywhere (or `git clone` if you prefer).
 
-BrainOS uses recursive `fs.watch` and `node:test`, both of which need Node 20+.
-There is no `npm install` step — the repo has zero dependencies.
+**3. Open it** — double-click [brainos.bat](brainos.bat) (Windows) or run
+[brainos.sh](brainos.sh) (macOS/Linux). Your browser opens on a small demo
+vault — click any node to read its note.
 
-**2. Get the code.**
+That's it. Whenever you're ready:
 
-```
-git clone https://github.com/cfirz/BrainOS
-cd BrainOS
-```
+- **Use your own notes** — see
+  [Point it at your own vault](#point-it-at-your-own-vault).
+- **AI questions over your notes** (optional) — see
+  [AI features](#ai-features-optional).
+- **Live agent tracking** (optional, Claude Code users) — see
+  [Agents board](#agents-board).
 
-(No git? GitHub's "Code → Download ZIP" works too — nothing depends on the
-checkout being a git repo.)
+### Troubleshooting
 
-**3. Start it.**
+- **`vaultPath is not a directory`** — the vault path you set doesn't exist
+  (or `config.json` points somewhere stale). Remember `~` is not expanded in
+  `config.json`.
+- **`Port 4321 is already in use`** — another BrainOS (or something else) owns
+  the port. Stop it, or set `port` in `config.json`. If hooks should reach a
+  non-default port, also set `BRAINOS_PORT` where the hooks run.
+- **Errors on startup** — almost always Node older than 20; check `node -v`.
+- **Agents / Flows / Icons panels are empty** — expected until the
+  [Agents board](#agents-board) hooks are installed and a Claude Code session
+  runs.
+- **Graph is static (no spark animations)** — your OS has reduced motion
+  switched on; on Windows, turning "animation effects" on in Settings brings
+  the motion back.
 
-```
-node server.js
-```
+## Point it at your own vault
 
-You should see `BrainOS listening on http://127.0.0.1:4321 (vault: …/starter-vault)`.
-Open http://127.0.0.1:4321 — the Rings graph of the bundled demo vault should be
-centred on its README, with project/lesson/machine/idea rings around it and
-hexagonal application nodes on the outer ring. Windows users can double-click
-[brainos.bat](brainos.bat) instead; macOS/Linux, run [brainos.sh](brainos.sh).
-
-**4. Poke around (optional sanity check).**
-
-- Click any node — the note opens in a side panel; wikilinks navigate the graph.
-- **Projects** shows a board built from the demo project pages; **Inbox** shows
-  the (empty) capture buffer.
-- Edit a note in `starter-vault/` while the server runs — the graph live-reloads.
-- `node --test` runs the test suite; all tests should pass.
-
-**5. Point it at your own vault.** Any folder of markdown files works:
+Any folder of markdown files works, and BrainOS treats it as **strictly
+read-only** — it never touches your notes. Either set `BRAINOS_VAULT` when
+starting the server:
 
 ```
 BRAINOS_VAULT=/path/to/your/vault node server.js     # macOS / Linux
@@ -90,42 +90,9 @@ set BRAINOS_VAULT=C:\path\to\your\vault && node server.js    # Windows cmd
 $env:BRAINOS_VAULT="C:\path\to\your\vault"; node server.js   # PowerShell
 ```
 
-For a permanent setting, copy [config.example.json](config.example.json) to
-`config.json` (gitignored) and set `vaultPath`. Use absolute paths in
-`config.json` — `~` is not expanded. See
-[Point it at your own vault](#point-it-at-your-own-vault) for the conventions
-that make the most of the dashboard.
-
-**6. Optional — AI features.** For ask-your-brain, either export
-`ANTHROPIC_API_KEY` or have the [Claude Code](https://claude.com/claude-code)
-CLI installed and logged in. Crons always need the CLI. Read the
-[privacy note](#ai-features-optional) first.
-
-**7. Optional — live agent tracking.** If you use Claude Code, wire the seven
-hooks described in [Agents board](#agents-board) into `~/.claude/settings.json`
-to light up the Agents, Flows and Icons panels.
-
-### Troubleshooting
-
-- **`vaultPath is not a directory`** — the path you gave doesn't exist (or
-  `config.json` points somewhere stale). The error lists the three ways to set
-  it; remember `~` is not expanded in `config.json`.
-- **`Port 4321 is already in use`** — another BrainOS (or something else) owns
-  the port. Stop it, or set `port` in `config.json`. If hooks should reach a
-  non-default port, also set `BRAINOS_PORT` where the hooks run.
-- **Syntax or `fs.watch` errors on startup** — almost always Node older than
-  20; check `node -v`.
-- **Agents / Flows / Icons panels are empty** — expected until the hooks from
-  step 7 are installed and a Claude Code session runs.
-- **Graph is static (no spark animations)** — your OS reports
-  `prefers-reduced-motion: reduce`; on Windows, switching "animation effects"
-  on in Settings brings the motion back.
-
-## Point it at your own vault
-
-Any folder of markdown files works — set `BRAINOS_VAULT` or `vaultPath` in
-`config.json` (step 5 above has the exact commands). BrainOS treats the vault
-as **strictly read-only**.
+or, for a permanent setting, copy
+[config.example.json](config.example.json) to `config.json` (gitignored) and
+set `vaultPath`. Use absolute paths in `config.json` — `~` is not expanded.
 
 You get the most out of the dashboard when the vault follows the conventions the
 UI understands (the bundled [starter-vault/](starter-vault/) demonstrates all of
