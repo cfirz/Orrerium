@@ -1,0 +1,113 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <title>BrainOS — Brain</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <link rel="stylesheet" href="/style.css">
+</head>
+<body>
+  <header class="topbar">
+    <div class="brand">BRAIN<span>OS</span></div>
+    <nav class="panel-nav">
+      <button class="nav-btn" data-panel="brain">Brain</button>
+      <button class="nav-btn" data-panel="projects">Projects</button>
+      <button class="nav-btn" data-panel="agents">Agents</button>
+      <button class="nav-btn" data-panel="flows">Flows</button>
+      <button class="nav-btn" data-panel="icons">Icons</button>
+      <button class="nav-btn" data-panel="crons">Crons</button>
+      <button class="nav-btn" data-panel="inbox">Inbox</button>
+    </nav>
+    <div class="layout-toggle" id="layout-toggle">
+      <span class="seg-label">layout</span>
+      <button class="seg-btn" data-layout="rings">Rings</button>
+      <button class="seg-btn" data-layout="force">Force</button>
+    </div>
+    <div class="search-wrap">
+      <input id="search" type="search" placeholder="Search notes…" autocomplete="off" spellcheck="false">
+      <span id="search-count" class="search-count"></span>
+    </div>
+    <div id="status-dot" class="status-dot" title="connecting…"></div>
+  </header>
+  <main class="layout panel-section" id="panel-brain">
+    <section id="graph-panel" class="graph-panel">
+      <svg id="graph" role="img" aria-label="Knowledge graph of the Brain vault"></svg>
+      <div id="legend" class="legend"></div>
+      <button id="ask-history-btn" class="ask-history-btn" title="Conversation history">🕘</button>
+      <div id="ask-history" class="ask-history hidden">
+        <div class="ask-history-head">Conversations</div>
+        <div id="ask-history-list"></div>
+      </div>
+      <div id="edge-tooltip" class="edge-tooltip hidden"></div>
+      <div class="ask-wrap">
+        <div id="ask-answer" class="ask-answer hidden">
+          <button class="clear-btn" title="New conversation">↺</button>
+          <button class="close-btn" title="Close">✕</button>
+          <div id="ask-answer-body"></div>
+          <div id="ask-meta" class="ask-meta"></div>
+        </div>
+        <form id="ask-form">
+          <input id="ask-input" type="text" placeholder="Ask your brain…" autocomplete="off" spellcheck="false">
+        </form>
+      </div>
+    </section>
+    <aside id="note-panel" class="note-panel hidden" aria-label="Note preview"></aside>
+  </main>
+  <main class="panel-section board-section hidden" id="panel-projects">
+    <div class="board-inner">
+      <div class="board-head" id="projects-head"></div>
+      <div class="proj-grid" id="projects-grid"></div>
+    </div>
+  </main>
+  <main class="panel-section board-section hidden" id="panel-agents">
+    <div class="board-inner">
+      <div class="board-head" id="agents-head"></div>
+      <div id="agents-cards"></div>
+    </div>
+  </main>
+  <main class="panel-section board-section hidden" id="panel-flows">
+    <div class="board-inner">
+      <div class="board-head" id="flows-head"></div>
+      <div class="flows-controls">
+        <select id="flows-select"></select>
+        <button id="flows-play" class="flow-play-btn" title="Replay">▶</button>
+        <input id="flows-scrub" type="range" min="0" max="1000" value="1000">
+      </div>
+      <div class="flows-timeline-wrap"><svg id="flows-svg" role="img" aria-label="Session timeline"></svg></div>
+      <div id="flows-detail"></div>
+    </div>
+  </main>
+  <main class="panel-section board-section hidden" id="panel-icons">
+    <div class="board-inner">
+      <div class="board-head" id="icons-head"></div>
+      <div id="icons-gallery" class="icons-gallery"></div>
+      <div id="icons-agents" class="icons-agents"></div>
+    </div>
+  </main>
+  <main class="panel-section board-section hidden" id="panel-crons">
+    <div class="board-inner">
+      <div class="board-head" id="crons-head"></div>
+      <form id="cron-form" class="cron-form">
+        <input id="cron-name" placeholder="job name" required>
+        <input id="cron-schedule" placeholder="every 30m · daily@07:30 · weekly@mon 09:00" required>
+        <input id="cron-cwd" placeholder="working dir (optional)">
+        <textarea id="cron-prompt" rows="2" placeholder="prompt for claude -p" required></textarea>
+        <label class="cron-catchup-label"><input type="checkbox" id="cron-catchup"> catch up missed runs at startup</label>
+        <button class="seg-btn" type="submit">Add / update</button>
+        <span id="cron-form-err" class="cron-err"></span>
+      </form>
+      <div id="crons-list"></div>
+      <div id="crons-calendar" class="crons-calendar"></div>
+      <div id="cron-detail"></div>
+    </div>
+  </main>
+  <main class="panel-section board-section hidden" id="panel-inbox">
+    <div class="board-inner">
+      <div class="board-head" id="inbox-head"></div>
+      <div id="inbox-entries"></div>
+    </div>
+  </main>
+  <script src="/vendor/d3.v7.min.js"></script>
+  <script type="module" src="/js/main.js"></script>
+</body>
+</html>

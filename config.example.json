@@ -1,0 +1,17 @@
+{
+  "vaultPath": "starter-vault",
+  "host": "127.0.0.1",
+  "port": 4321,
+  "excludeDirs": [".obsidian", ".claude", ".git"],
+  "applicationTags": ["unity", "python", "android", "windows", "obsidian", "git"],
+  "ai": {
+    "provider": "auto",
+    "model": "claude-opus-5",
+    "cliCommand": "claude",
+    "timeoutMs": 180000
+  },
+  "claudeScan": {
+    "roots": [],
+    "rescanMs": 300000
+  }
+}

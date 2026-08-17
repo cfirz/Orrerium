@@ -1,0 +1,14 @@
+# Obsidian per-machine / volatile state (rest of .obsidian/ stays tracked)
+.obsidian/workspace.json
+.obsidian/workspace-mobile.json
+.obsidian/cache
+
+# Obsidian trash
+.trash/
+
+# Per-machine Claude Code state (.claude/skills/ stays tracked — it is the vault's workflow)
+.claude/settings.local.json
+
+# Windows noise
+Thumbs.db
+desktop.ini

@@ -1,0 +1,6 @@
+{
+  "skillOverrides": {
+    "dormant": "off",
+    "agent-helper": "off"
+  }
+}
