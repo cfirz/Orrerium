@@ -40,15 +40,29 @@ one. The server runs in that window — Ctrl+C or closing it stops the server.
 Three steps, all offline — no accounts, no API keys, nothing to install.
 
 **1. Install Node.js** — version 20 or newer, from
-[nodejs.org](https://nodejs.org).
+[nodejs.org](https://nodejs.org). To check what you have:
+
+```
+node -v      # should print v20.x or higher
+```
 
 **2. Download BrainOS** — on the
 [GitHub page](https://github.com/cfirz/BrainOS), click **Code → Download ZIP**
-and unzip it anywhere (or `git clone` if you prefer).
+and unzip it anywhere. Or, if you use git:
+
+```
+git clone https://github.com/cfirz/BrainOS
+```
 
 **3. Open it** — double-click [brainos.bat](brainos.bat) (Windows) or run
-[brainos.sh](brainos.sh) (macOS/Linux). Your browser opens on a small demo
-vault — click any node to read its note.
+[brainos.sh](brainos.sh) (macOS/Linux):
+
+```
+cd BrainOS
+./brainos.sh     # macOS / Linux — Windows: double-click brainos.bat
+```
+
+Your browser opens on a small demo vault — click any node to read its note.
 
 That's it. Whenever you're ready:
 
