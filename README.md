@@ -148,6 +148,7 @@ notes, and start capturing.
 | `folderTypes` | `projects` → `project`, … | Folder name → note type for vaults with different conventions; values must be one of the five built-in types, and a provided map **replaces** the default (start from a copy of it) |
 | `ai.provider` | `auto` | `api` (Claude API via `ANTHROPIC_API_KEY`), `cli` (local `claude` CLI / Claude Code login), or `auto` (api if the key is set, else cli) |
 | `ai.model` | `claude-opus-5` | Model for the API provider (the CLI uses its own configured model) |
+| `ai.maxContextTokens` | `120000` | Ask context budget: vaults estimated under it ship whole (and prompt-cache); over it a local BM25 + link-graph retrieval step selects the notes that fit |
 | `claudeScan.roots` | `[]` | Dirs whose children are scanned (one level) for `.claude/{skills,agents,commands}` — absolute paths, e.g. `["C:/code"]` or `["/Users/you/code"]` |
 | `claudeScan.globalDir` | `~/.claude` | The global Claude dir, scanned the same way |
 | `claudeScan.settingsPath` | `~/.claude/settings.json` | Read for `skillOverrides` so disabled skills render dormant |
@@ -165,11 +166,13 @@ Two features talk to an LLM; everything else is fully offline.
   conversation).
 - **Crons** (`#/crons`) runs headless `claude -p` jobs and always needs the CLI.
 
-**Privacy note:** ask-your-brain builds its context from the *entire vault* —
-every question ships your whole vault's text to the configured provider (the
-Anthropic API, or whatever the `claude` CLI is logged into). Don't point Orrerium
-at a vault you wouldn't send there. Very large vaults may also exceed the model's
-context window; there is no retrieval fallback yet.
+**Privacy note:** for vaults that fit the context budget
+(`ai.maxContextTokens`, default 120k tokens ≈ 480 KB of markdown), every
+question ships your *whole vault's* text to the configured provider (the
+Anthropic API, or whatever the `claude` CLI is logged into). Bigger vaults go
+through a local retrieval step that selects only the notes relevant to the
+question — but those are still vault text going to the provider. Don't point
+Orrerium at a vault you wouldn't send there.
 
 ## Architecture (10 lines)
 
@@ -370,5 +373,4 @@ see [public/vendor/README.md](public/vendor/README.md).
 
 ## Roadmap
 
-Still open: a retrieval step for vaults too big for one context window; a
-stats/usage panel.
+Still open: a stats/usage panel.

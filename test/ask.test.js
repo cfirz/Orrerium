@@ -129,6 +129,41 @@ test('askApi streams SSE deltas, split mid-line, into onDelta and the answer', (
       assert.equal(result.model, 'claude-test');
       assert.equal(requestBody.stream, true);
       assert.equal(requestBody.system[0].cache_control.type, 'ephemeral'); // caching survives streaming
+      assert.doesNotMatch(requestBody.system[0].text, /too large for one context/); // under budget: no retrieval notice
+    });
+  }));
+
+test('an over-budget vault ships a retrieval-filtered context with the notice', () =>
+  withApiKey(() => {
+    let requestBody;
+    return withSseServer((req, res) => {
+      let body = '';
+      req.on('data', (c) => { body += c; });
+      req.on('end', () => {
+        requestBody = JSON.parse(body);
+        res.writeHead(200, { 'content-type': 'text/event-stream' });
+        res.write('data: {"type":"content_block_delta","delta":{"type":"text_delta","text":"ok"}}\n\n');
+        res.end();
+      });
+    }, async (apiUrl) => {
+      const base = { path: 'x.md', folder: 'projects', type: 'project', description: null,
+        tags: [], updated: null, status: null, dir: null, projectLinks: [], bodyLinks: [], docLinks: [] };
+      // no token overlap between the question and boring-note, or BM25 would
+      // legitimately count it a (weak) match
+      const notes = [
+        { ...base, id: 'orbital-note', name: 'orbital-note', rawBody: 'orbital mechanics: apoapsis, periapsis, delta-v budgets, transfer windows, burn timing references' },
+        { ...base, id: 'boring-note', name: 'boring-note', rawBody: 'compost heap layout, watering schedule, seasonal pruning reminders, garden bed rotation, mulch supplier list' },
+      ];
+      const result = await ask('explain orbital mechanics', {
+        notes, skills: [],
+        ai: { provider: 'api', model: 'm', timeoutMs: 5000, apiUrl, maxContextTokens: 50 },
+        onDelta: () => {},
+      });
+      assert.equal(result.answer, 'ok');
+      const system = requestBody.system[0].text;
+      assert.match(system, /\[\[orbital-note\]\]/);
+      assert.doesNotMatch(system, /\[\[boring-note\]\]/);
+      assert.match(system, /too large for one context/);
     });
   }));
 

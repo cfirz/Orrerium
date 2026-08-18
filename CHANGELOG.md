@@ -19,6 +19,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - `folderTypes` in `config.json` maps custom folder names (PARA,
   Zettelkasten, …) onto the five built-in note types; the graph, boards
   and colours follow the mapping with no other changes.
+- Vaults too big for one context window now go through a local retrieval
+  step: BM25 over the notes plus one hop along their wikilinks, filling
+  the `ai.maxContextTokens` budget (default 120k). Smaller vaults still
+  ship whole and keep the prompt-cache win.
 
 ### Changed
 
