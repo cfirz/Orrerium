@@ -131,7 +131,7 @@ notes, and start capturing.
 | Key | Default | Meaning |
 |---|---|---|
 | `vaultPath` | `starter-vault` | Markdown vault to visualize (relative paths resolve from the repo root; `BRAINOS_VAULT` overrides) |
-| `host` / `port` | `127.0.0.1` / `4321` | Where the dashboard listens |
+| `host` / `port` | `127.0.0.1` / `4321` | Where the dashboard listens — keep it on loopback, see [SECURITY.md](SECURITY.md) |
 | `excludeDirs` | `.obsidian`, `.claude`, `.git` | Folders never scanned (skills are scanned explicitly) |
 | `applicationTags` | `unity`, `python`, … | Tags that become APPLICATION nodes on the outer ring |
 | `ai.provider` | `auto` | `api` (Claude API via `ANTHROPIC_API_KEY`), `cli` (local `claude` CLI / Claude Code login), or `auto` (api if the key is set, else cli) |
@@ -320,6 +320,16 @@ node --test
 
 Fixture mini-vault under `test/fixtures/vault/` plus a smoke test against the
 bundled starter vault.
+
+## Contributing
+
+Bug reports, fixes, and macOS/Linux portability patches are welcome — please open an
+issue before a PR so scope is agreed first. [CONTRIBUTING.md](CONTRIBUTING.md) has the
+details, including the three design constraints (zero dependencies, never write the
+vault, keep the parser modules pure) that a change must not break.
+
+Security issues go through private reporting rather than a public issue — see
+[SECURITY.md](SECURITY.md), which also covers what to keep in mind when running it.
 
 ## License
 
