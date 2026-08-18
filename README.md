@@ -333,6 +333,15 @@ events, so scheduled runs appear on the Agents board and in Flows. The panel
 has the job list (enable/run-now/delete), a week calendar (● past runs
 green/red, ○ upcoming), and per-run output.
 
+## Stats
+
+`#/stats` rolls up everything Orrerium logs into one page: stat tiles for the
+last fortnight (sessions split interactive/cron, tool calls, errors, subagent
+spawns, active time), a per-day bar chart of tool calls with errors overlaid,
+the top tools, per-job cron health, and ask usage by model. Fully offline —
+it reads the same `data/` logs the Agents board and Crons panel write, so it
+is empty until those features have something to log.
+
 ## API (what an agent can use)
 
 - `GET /api/graph` → `{ generatedAt, vaultPath, nodes, edges, warnings }`
@@ -374,4 +383,6 @@ see [public/vendor/README.md](public/vendor/README.md).
 
 ## Roadmap
 
-Still open: a stats/usage panel.
+Everything from the original roadmap has shipped: streaming ask answers, a
+retrieval step for oversized vaults, configurable folder→type mapping, and the
+stats panel. New ideas are tracked as GitHub issues.

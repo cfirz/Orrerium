@@ -2,7 +2,7 @@
 // The active panel is stamped on <body data-panel> so CSS can scope the
 // topbar controls, mirrored into the URL hash (#/name) so panels deep-link,
 // and persisted across sessions.
-const PANELS = ['brain', 'projects', 'agents', 'flows', 'icons', 'crons', 'inbox'];
+const PANELS = ['brain', 'projects', 'agents', 'flows', 'icons', 'crons', 'stats', 'inbox'];
 
 export function initPanels({ onShow }) {
   const buttons = [...document.querySelectorAll('.nav-btn')];

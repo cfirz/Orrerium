@@ -16,6 +16,7 @@
       <button class="nav-btn" data-panel="flows">Flows</button>
       <button class="nav-btn" data-panel="icons">Icons</button>
       <button class="nav-btn" data-panel="crons">Crons</button>
+      <button class="nav-btn" data-panel="stats">Stats</button>
       <button class="nav-btn" data-panel="inbox">Inbox</button>
     </nav>
     <div class="layout-toggle" id="layout-toggle">
@@ -105,6 +106,18 @@
       <div id="crons-list"></div>
       <div id="crons-calendar" class="crons-calendar"></div>
       <div id="cron-detail"></div>
+    </div>
+  </main>
+  <main class="panel-section board-section hidden" id="panel-stats">
+    <div class="board-inner">
+      <div class="board-head" id="stats-head"></div>
+      <div class="stats-tiles" id="stats-tiles"></div>
+      <div class="stats-chart" id="stats-days"></div>
+      <div class="stats-cols">
+        <div id="stats-tools"></div>
+        <div id="stats-crons"></div>
+      </div>
+      <div id="stats-ask"></div>
     </div>
   </main>
   <main class="panel-section board-section hidden" id="panel-inbox">

@@ -24,6 +24,9 @@
   /* live agent activity - its own channel, not a brightness of a type colour:
      a gold spark on a gold project node is invisible */
   --c-live: #9ef0ff;
+  /* stats chart bars: --c-machine snapped into the validated dark-mode
+     lightness band (CVD-checked against --c-lesson on --bg) */
+  --stat-bar: #5495d1;
 }
 
 * { box-sizing: border-box; }
@@ -866,6 +869,62 @@ body:not([data-panel="brain"]) .motion-toggle { display: none; }
   margin: 6px 0 0;
 }
 #cron-detail { max-width: 860px; }
+
+/* ---------- stats ---------- */
+.stats-tiles {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(130px, 1fr));
+  gap: 10px;
+  max-width: 860px;
+  margin-bottom: 18px;
+}
+.stat-tile {
+  background: var(--panel);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 12px 14px;
+}
+.stat-num { font-size: 22px; color: var(--text); }
+.stat-label { font-size: 11px; color: var(--text-dim); text-transform: uppercase; letter-spacing: 1px; margin-top: 2px; }
+.stats-chart { max-width: 860px; margin-bottom: 18px; }
+.stats-chart svg { width: 100%; height: auto; display: block; }
+.stats-legend { display: flex; gap: 16px; font-size: 11px; color: var(--text-dim); margin-bottom: 6px; }
+.stats-dot { width: 8px; height: 8px; border-radius: 2px; display: inline-block; margin-right: 5px; vertical-align: -1px; }
+.stat-bar { fill: var(--stat-bar); opacity: 0.85; }
+.stat-bar-err { fill: var(--c-lesson); }
+.stats-day:hover .stat-bar { opacity: 1; }
+.stats-axis { stroke: var(--border); }
+.stats-tick { fill: var(--text-dim); font-size: 10px; }
+.stats-tick.today { fill: var(--text); }
+.stats-max { fill: var(--text-dim); font-size: 10px; }
+.stats-cols {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 28px;
+  max-width: 860px;
+}
+@media (max-width: 720px) { .stats-cols { grid-template-columns: 1fr; } }
+.stats-h { font-size: 12px; letter-spacing: 3px; color: var(--accent); margin: 10px 0 8px; }
+.tool-row { display: flex; align-items: center; gap: 8px; font-size: 12px; margin-bottom: 6px; }
+.tool-name { flex: 0 0 110px; color: var(--text); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.tool-track { flex: 1; }
+.tool-bar { height: 8px; border-radius: 2px; background: var(--stat-bar); opacity: 0.85; }
+.tool-count { flex: 0 0 auto; color: var(--text-dim); font-size: 11px; }
+.stats-cron-row {
+  display: flex;
+  gap: 12px;
+  align-items: baseline;
+  font-size: 12px;
+  padding: 6px 0;
+  border-top: 1px solid var(--border);
+}
+.stats-cron-row.off { opacity: 0.55; }
+.stats-cron-row .cron-name { flex: 1; color: var(--text); }
+.stats-ok { color: var(--c-idea); }
+.stats-failed { color: var(--c-lesson); }
+.stats-dim { color: var(--text-dim); }
+#stats-ask { max-width: 860px; margin-top: 6px; }
+.stats-ask-row { font-size: 12px; color: var(--text); padding: 3px 0; }
 
 /* ---------- scrollbars (webkit) ---------- */
 ::-webkit-scrollbar { width: 10px; height: 10px; }
