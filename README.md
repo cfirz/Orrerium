@@ -328,7 +328,7 @@ green/red, ○ upcoming), and per-run output.
 
 - `GET /api/graph` → `{ generatedAt, vaultPath, nodes, edges, warnings }`
 - `GET /api/note/:slug` → `{ id, path, folder, type, frontmatter, markdown }` (also serves scanned claude assets, e.g. `DemoApp.qa-agent`)
-- `POST /api/ask` `{ question, history? }` → `{ answer, provider, model }` (markdown with `[[wikilink]]` citations; `history` is prior `{role, content}` turns)
+- `POST /api/ask` `{ question, history? }` → `{ answer, provider, model }` (markdown with `[[wikilink]]` citations; `history` is prior `{role, content}` turns; `model` is the configured API model or, for the CLI, the model the session reported)
 - `POST /api/ask` with `"stream": true` → `application/x-ndjson`: one `{"type":"meta","provider"}` line, `{"type":"delta","text"}` lines as the answer generates, closed by `{"type":"done", answer, provider, model, conversationId}` (authoritative full text) or `{"type":"error", error}`. The ask panel uses this; the plain JSON shape above stays for scripts.
 - `GET /api/agents` → `{ generatedAt, sessions: [...] }` — the live board snapshot
 - `POST /api/hook-event` — Claude Code hook payloads (whitelisted, truncated, logged)

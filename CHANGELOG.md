@@ -14,6 +14,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   relays the answer as NDJSON delta lines; the plain JSON shape is
   unchanged for scripts.
 
+### Changed
+
+- Ask answers report the actual model the `claude` CLI session used instead
+  of the "claude-cli default" placeholder (streaming runs only; buffered
+  text mode has no way to know).
+
 ### Fixed
 
 - Oversized POST bodies now receive a 413 response instead of a silently

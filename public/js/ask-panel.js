@@ -93,7 +93,7 @@ export function initAskPanel({ onNavigate }) {
       // always adopt: a server that pruned/lost the id issues a fresh one
       conversationId = data.conversationId ?? conversationId;
       history.push({ role: 'user', content: question }, { role: 'assistant', content: data.answer });
-      meta.textContent = `answered via ${data.provider === 'api' ? data.model : 'claude CLI'} · follow-ups keep context`;
+      meta.textContent = `answered via ${data.model} · follow-ups keep context`;
     } catch (err) {
       aEl.innerHTML = `<div class="ask-error">${escapeHtml(err.message)}</div>`;
     } finally {

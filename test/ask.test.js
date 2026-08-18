@@ -187,6 +187,7 @@ test('askCli streams stream-json deltas; the result event text is authoritative'
   assert.deepEqual(deltas, ['Hello ', 'vault']);
   assert.equal(result.answer, 'Hello vault!'); // from the result event, not the deltas
   assert.equal(result.provider, 'cli');
+  assert.equal(result.model, 'claude-test'); // from the init event
 });
 
 test('askCli falls back to buffered text mode when the CLI rejects the streaming flags', async () => {
@@ -196,6 +197,7 @@ test('askCli falls back to buffered text mode when the CLI rejects the streaming
     const result = await ask('q', { notes: [], skills: [], ai: cliAi, onDelta: (t) => deltas.push(t) });
     assert.deepEqual(deltas, []); // no streaming, but still an answer
     assert.equal(result.answer, 'buffered answer');
+    assert.equal(result.model, 'claude-cli default'); // text mode emits no init event
   } finally {
     delete process.env.FAKE_CLI_MODE;
   }
