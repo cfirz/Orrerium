@@ -5,12 +5,16 @@ import { renderMarkdown, escapeHtml } from './md.js';
 export function initAskPanel({ onNavigate }) {
   const form = document.getElementById('ask-form');
   const input = document.getElementById('ask-input');
+  const stopBtn = document.getElementById('ask-stop');
   const card = document.getElementById('ask-answer');
   const thread = document.getElementById('ask-answer-body');
   const meta = document.getElementById('ask-meta');
   let history = []; // {role, content} pairs sent back with every question
   let conversationId = null; // server-issued id; carried so history persists
   let pending = false;
+  let controller = null; // aborts the in-flight ask; server cancels the provider
+
+  stopBtn.addEventListener('click', () => controller?.abort());
 
   card.addEventListener('click', (ev) => {
     const a = ev.target.closest('a[data-slug]');
@@ -37,6 +41,8 @@ export function initAskPanel({ onNavigate }) {
     pending = true;
     input.disabled = true;
     input.value = '';
+    controller = new AbortController();
+    stopBtn.classList.remove('hidden');
     show();
 
     const qEl = document.createElement('div');
@@ -49,11 +55,13 @@ export function initAskPanel({ onNavigate }) {
     thread.appendChild(aEl);
     scrollToEnd();
 
+    let answer = '';
     try {
       const res = await fetch('/api/ask', {
         method: 'POST',
         headers: { 'content-type': 'application/json' },
         body: JSON.stringify({ question, history, conversationId, stream: true }),
+        signal: controller.signal,
       });
       if (!res.ok) {
         const data = await res.json().catch(() => null);
@@ -66,7 +74,6 @@ export function initAskPanel({ onNavigate }) {
       const reader = res.body.getReader();
       const decoder = new TextDecoder();
       let buf = '';
-      let answer = '';
       let data = null;
       while (true) {
         const { value, done: eof } = await reader.read();
@@ -95,9 +102,18 @@ export function initAskPanel({ onNavigate }) {
       history.push({ role: 'user', content: question }, { role: 'assistant', content: data.answer });
       meta.textContent = `answered via ${data.model} · follow-ups keep context`;
     } catch (err) {
-      aEl.innerHTML = `<div class="ask-error">${escapeHtml(err.message)}</div>`;
+      if (err.name === 'AbortError') {
+        // stopped by the user: keep whatever streamed in, drop the turn -
+        // it rides in neither client history nor the server's record
+        aEl.innerHTML = (answer ? renderMarkdown(answer) : '') + '<div class="ask-stopped">stopped</div>';
+        meta.textContent = 'stopped — this turn was not kept';
+      } else {
+        aEl.innerHTML = `<div class="ask-error">${escapeHtml(err.message)}</div>`;
+      }
     } finally {
       pending = false;
+      controller = null;
+      stopBtn.classList.add('hidden');
       input.disabled = false;
       input.focus();
       scrollToEnd();

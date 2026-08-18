@@ -522,7 +522,23 @@ body:not([data-panel="brain"]) .motion-toggle { display: none; }
   gap: 8px;
   z-index: 5;
 }
-#ask-form { display: flex; }
+#ask-form { display: flex; position: relative; }
+#ask-stop {
+  position: absolute;
+  right: 8px;
+  top: 50%;
+  transform: translateY(-50%);
+  background: none;
+  border: none;
+  color: var(--text-dim);
+  font-size: 12px;
+  line-height: 1;
+  padding: 4px 6px;
+  cursor: pointer;
+}
+#ask-stop:hover { color: var(--c-lesson); }
+#ask-stop.hidden { display: none; }
+.ask-stopped { color: var(--text-dim); font-style: italic; font-size: 12px; margin-top: 4px; }
 #ask-input {
   flex: 1;
   background: color-mix(in srgb, var(--panel) 92%, transparent);

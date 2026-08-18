@@ -13,6 +13,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   (Claude API and `claude` CLI). `POST /api/ask` with `"stream": true`
   relays the answer as NDJSON delta lines; the plain JSON shape is
   unchanged for scripts.
+- Stop button on the ask box: cancels the in-flight answer mid-stream,
+  aborts the provider call server-side, and drops the stopped turn from
+  the conversation.
 
 ### Changed
 

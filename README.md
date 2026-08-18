@@ -156,7 +156,10 @@ Two features talk to an LLM; everything else is fully offline.
 
 - **Ask-your-brain** (`#/brain`, ask box) needs either `ANTHROPIC_API_KEY` set in
   the environment, or the [Claude Code](https://claude.com/claude-code) CLI
-  installed and logged in (`ai.provider` picks; `auto` prefers the key).
+  installed and logged in (`ai.provider` picks; `auto` prefers the key). Answers
+  stream in as they generate; the stop button cancels mid-answer (the provider
+  call is aborted server-side, and a stopped turn is not kept in the
+  conversation).
 - **Crons** (`#/crons`) runs headless `claude -p` jobs and always needs the CLI.
 
 **Privacy note:** ask-your-brain builds its context from the *entire vault* —
