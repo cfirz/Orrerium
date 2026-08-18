@@ -116,13 +116,13 @@ const cronRunner = createCronRunner({
   ai: config.ai,
   onChange: () => broadcast('crons', { jobs: cronRunner.list() }),
   onRunStart: (job, ts) => {
-    agentTracker.record({ ts, hook_event_name: 'SessionStart', session_id: cronSession(job, ts), cwd: job.cwd ?? config.root });
-    agentTracker.record({ ts, hook_event_name: 'UserPromptSubmit', session_id: cronSession(job, ts), cwd: job.cwd ?? config.root, prompt: `[cron ${job.name}] ${job.prompt}` });
+    agentTracker.record({ ts, event: 'SessionStart', sessionId: cronSession(job, ts), cwd: job.cwd ?? config.root }, 'cron');
+    agentTracker.record({ ts, event: 'UserPromptSubmit', sessionId: cronSession(job, ts), cwd: job.cwd ?? config.root, prompt: `[cron ${job.name}] ${job.prompt}` }, 'cron');
     broadcast('agents', agentTracker.snapshot());
     console.log(`[crons] ${job.id} started`);
   },
   onRunEnd: (job, record) => {
-    agentTracker.record({ ts: record.endedAt, hook_event_name: 'SessionEnd', session_id: cronSession(job, record.startedAt), cwd: job.cwd ?? config.root });
+    agentTracker.record({ ts: record.endedAt, event: 'SessionEnd', sessionId: cronSession(job, record.startedAt), cwd: job.cwd ?? config.root }, 'cron');
     broadcast('agents', agentTracker.snapshot());
     console.log(`[crons] ${job.id} ${record.status} in ${Math.round(record.ms / 1000)}s`);
   },
@@ -144,7 +144,7 @@ const server = http.createServer((req, res) => {
   const p = url.pathname;
 
   if (req.method === 'POST' && p === '/api/ask') return handleAsk(req, res);
-  if (req.method === 'POST' && p === '/api/hook-event') return handleHookEvent(req, res);
+  if (req.method === 'POST' && p === '/api/hook-event') return handleHookEvent(req, res, url.searchParams.get('source'));
   if (req.method === 'POST' && p === '/api/icons/assign') return handleIconAssign(req, res);
   if (req.method === 'POST' && p === '/api/crons') return handleCronUpsert(req, res);
   const cronRun = /^\/api\/crons\/([A-Za-z0-9._-]+)\/run$/.exec(p);
@@ -304,8 +304,16 @@ function handleAsk(req, res) {
 }
 
 // hook payloads can be big (whole tool inputs/responses ride along) - higher
-// cap than /api/ask, and the tracker whitelists/truncates before persisting
-function handleHookEvent(req, res) {
+// cap than /api/ask, and the tracker whitelists/truncates before persisting.
+// ?source= names the wire dialect (claude-code when absent, so every already
+// installed hook keeps working); any other well-formed slug is accepted and
+// read as the normalized generic shape - that is the open ingest contract.
+const SOURCE_RE = /^[a-z0-9][a-z0-9-]{0,31}$/;
+
+function handleHookEvent(req, res, source) {
+  if (source != null && !SOURCE_RE.test(source)) {
+    return sendJson(res, 400, { error: 'source must be a lowercase [a-z0-9-] slug, max 32 chars' });
+  }
   let body = '';
   let size = 0;
   req.on('data', (chunk) => {
@@ -321,7 +329,7 @@ function handleHookEvent(req, res) {
       return sendJson(res, 400, { error: 'body must be a JSON hook payload' });
     }
     if (!raw || typeof raw !== 'object') return sendJson(res, 400, { error: 'not an object' });
-    agentTracker.record(raw);
+    agentTracker.record(raw, source ?? undefined);
     broadcast('agents', agentTracker.snapshot());
     res.writeHead(204);
     res.end();

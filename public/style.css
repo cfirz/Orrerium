@@ -657,9 +657,11 @@ body:not([data-panel="brain"]) .motion-toggle { display: none; }
 .agent-card.system .agent-activity { color: var(--text-dim); font-style: italic; }
 .agents-filters { display: flex; margin-top: 10px; }
 .agents-filters .seg-btn { cursor: pointer; }
+.agents-sources { margin-top: 6px; }
 .chip-count { color: var(--text-dim); font-size: 11px; margin-left: 3px; }
 .agent-title { display: flex; align-items: center; gap: 8px; }
 .agent-project { font-weight: 600; }
+.agent-source { color: var(--text-dim); border: 1px solid var(--border); border-radius: 9px; padding: 0 7px; font-size: 10px; flex: none; }
 .agent-session { color: var(--text-dim); font-family: Consolas, monospace; font-size: 11px; }
 .agent-when { margin-left: auto; color: var(--text-dim); font-size: 11px; flex: none; }
 .agent-dot { width: 8px; height: 8px; border-radius: 50%; display: inline-block; flex: none; }
