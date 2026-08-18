@@ -91,8 +91,8 @@ That's it. Whenever you're ready:
   non-default port, also set `ORRERIUM_PORT` where the hooks run.
 - **Errors on startup** — almost always Node older than 20; check `node -v`.
 - **Agents / Flows / Icons panels are empty** — expected until the
-  [Agents board](#agents-board) hooks are installed and a Claude Code session
-  runs.
+  [Agents board](#agents-board) hooks are installed (`node hooks/install.js`)
+  and a Claude Code session runs.
 - **Graph is static (no spark animations)** — your OS has reduced motion
   switched on *and* the topbar **motion** toggle is set to Auto; switch it back
   to **On** (the default). On Windows, turning "animation effects" on in
@@ -196,10 +196,23 @@ through [hooks/emit.js](hooks/emit.js) — a fire-and-forget emitter that always
 exits 0 and swallows every failure, so sessions never notice when Orrerium is
 down (a PreToolUse hook that exits non-zero would block the tool call).
 
-To enable, add hook entries to `~/.claude/settings.json` for **all seven**
-events — `SessionStart`, `UserPromptSubmit`, `PreToolUse` (matcher `*`),
-`PostToolUse` (matcher `*`), `SubagentStop`, `Stop`, `SessionEnd` — each running
-the same command (replace the path with your clone's absolute path):
+To enable, run the installer once from your clone:
+
+```
+node hooks/install.js
+```
+
+It merges hook entries for all seven events into `~/.claude/settings.json`,
+shows the plan and asks before writing, and backs the file up beside itself
+first — every other setting and every existing hook stays untouched.
+`--dry-run` previews without writing, `--uninstall` takes the hooks back out,
+and re-running it after moving the clone fixes up the stale paths.
+Already-running Claude Code sessions pick the hooks up on their next restart.
+
+Prefer to wire it by hand? Add hook entries for **all seven** events —
+`SessionStart`, `UserPromptSubmit`, `PreToolUse` (matcher `*`), `PostToolUse`
+(matcher `*`), `SubagentStop`, `Stop`, `SessionEnd` — each running the same
+command (replace the path with your clone's absolute path):
 
 ```json
 "hooks": {
