@@ -11,6 +11,7 @@ import { sseHandler, broadcast } from './lib/sse.js';
 import { scanClaudeAssets, mergeClaudeAssets } from './lib/claude-scan.js';
 import { createAgentTracker } from './lib/agents.js';
 import { summarize, groupSessions, buildFlow } from './lib/flows.js';
+import { buildStats } from './lib/stats.js';
 import { readLines, readJson, writeJson } from './lib/store.js';
 import { readBody } from './lib/http-body.js';
 import { createCronRunner } from './lib/crons.js';
@@ -179,6 +180,16 @@ const server = http.createServer((req, res) => {
   const cronRuns = /^\/api\/crons\/([A-Za-z0-9._-]+)\/runs$/.exec(p);
   if (cronRuns) return sendJson(res, 200, { runs: cronRunner.runsFor(cronRuns[1]) });
   if (p === '/api/flows') return sendJson(res, 200, { sessions: summarize(recentAgentEvents()) });
+  if (p === '/api/stats') {
+    // recomputed per request, like /api/flows - see the note in lib/stats.js
+    const jobs = cronRunner.list();
+    return sendJson(res, 200, buildStats({
+      events: recentAgentEvents(),
+      cronJobs: jobs,
+      cronRunsByJob: Object.fromEntries(jobs.map((j) => [j.id, cronRunner.runsFor(j.id)])),
+      conversations: askHistory.list(),
+    }));
+  }
   if (p.startsWith('/api/flows/')) {
     let sessionId;
     try {

@@ -342,6 +342,7 @@ green/red, ○ upcoming), and per-run output.
 - `GET /api/agents` → `{ generatedAt, sessions: [...] }` — the live board snapshot
 - `POST /api/hook-event` — Claude Code hook payloads (whitelisted, truncated, logged)
 - `GET /api/flows` → `{ sessions: [...] }` — replayable sessions from the last fortnight's log
+- `GET /api/stats` → `{ generatedAt, days, totals, topTools, crons, ask }` — per-day usage rollups over the same fortnight (sessions split interactive/cron, tool calls, errors, subagent spawns, active time), cron run health per job, and ask usage by provider+model
 - `GET /api/flows/:sessionId` → `{ sessionId, flow: { start, end, lanes, spans, ticks, prompts } }`
 - `GET /api/icons` / `POST /api/icons/assign` `{ agent, icon|null }` → `{ assignments }`
 - `GET /api/crons` → `{ jobs }` · `POST /api/crons` (upsert def) · `POST /api/crons/:id/run` · `GET /api/crons/:id/runs` · `DELETE /api/crons/:id`

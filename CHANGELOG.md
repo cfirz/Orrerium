@@ -23,6 +23,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   step: BM25 over the notes plus one hop along their wikilinks, filling
   the `ai.maxContextTokens` budget (default 120k). Smaller vaults still
   ship whole and keep the prompt-cache win.
+- `GET /api/stats`: per-day usage rollups over the last fortnight's logs —
+  sessions (interactive vs cron), tool calls, errors, subagent spawns,
+  active time, top tools, cron run health, and ask usage by model.
 
 ### Changed
 
