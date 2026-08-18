@@ -12,6 +12,7 @@ import { scanClaudeAssets, mergeClaudeAssets } from './lib/claude-scan.js';
 import { createAgentTracker } from './lib/agents.js';
 import { summarize, groupSessions, buildFlow } from './lib/flows.js';
 import { readLines, readJson, writeJson } from './lib/store.js';
+import { readBody } from './lib/http-body.js';
 import { createCronRunner } from './lib/crons.js';
 import { createAskHistory } from './lib/ask-history.js';
 
@@ -222,134 +223,113 @@ function serveNote(slug, res) {
   });
 }
 
-function handleAsk(req, res) {
-  let body = '';
-  let size = 0;
-  req.on('data', (chunk) => {
-    size += chunk.length;
-    if (size > 64 * 1024) { req.destroy(); return; }
-    body += chunk;
-  });
-  req.on('end', async () => {
-    let payload;
+async function handleAsk(req, res) {
+  const body = await readBody(req, res, 64 * 1024);
+  if (body === null) return;
+  let payload;
+  try {
+    payload = JSON.parse(body);
+  } catch {
+    return sendJson(res, 400, { error: 'body must be JSON: {"question": "..."}' });
+  }
+  const question = payload?.question;
+  if (typeof question !== 'string' || !question.trim() || question.length > 4000) {
+    return sendJson(res, 400, { error: 'question must be a non-empty string (max 4000 chars)' });
+  }
+  if (payload?.conversationId != null && !(typeof payload.conversationId === 'string' && SLUG_RE.test(payload.conversationId))) {
+    return sendJson(res, 400, { error: 'invalid conversationId' });
+  }
+  // prior turns from the client, sanitized: role/content pairs only, capped
+  const history = (Array.isArray(payload?.history) ? payload.history : [])
+    .filter((h) => (h?.role === 'user' || h?.role === 'assistant') && typeof h?.content === 'string' && h.content.length <= 16000)
+    .slice(-20);
+  const record = (result) => {
+    // a disk hiccup must not turn a good answer into an error
     try {
-      payload = JSON.parse(body);
-    } catch {
-      return sendJson(res, 400, { error: 'body must be JSON: {"question": "..."}' });
-    }
-    const question = payload?.question;
-    if (typeof question !== 'string' || !question.trim() || question.length > 4000) {
-      return sendJson(res, 400, { error: 'question must be a non-empty string (max 4000 chars)' });
-    }
-    if (payload?.conversationId != null && !(typeof payload.conversationId === 'string' && SLUG_RE.test(payload.conversationId))) {
-      return sendJson(res, 400, { error: 'invalid conversationId' });
-    }
-    // prior turns from the client, sanitized: role/content pairs only, capped
-    const history = (Array.isArray(payload?.history) ? payload.history : [])
-      .filter((h) => (h?.role === 'user' || h?.role === 'assistant') && typeof h?.content === 'string' && h.content.length <= 16000)
-      .slice(-20);
-    const record = (result) => {
-      // a disk hiccup must not turn a good answer into an error
-      try {
-        return askHistory.record({
-          id: payload.conversationId, history, question: question.trim(),
-          answer: result.answer, provider: result.provider, model: result.model,
-        }).id;
-      } catch (err) {
-        console.error(`[ask] history write failed: ${err.message}`);
-        return null;
-      }
-    };
-
-    if (payload?.stream === true) {
-      // NDJSON relay: {type:meta}, {type:delta}* then {type:done} or {type:error}.
-      // The status is committed before the provider runs, so provider failures
-      // ride an error line, not an HTTP code.
-      res.writeHead(200, {
-        'Content-Type': 'application/x-ndjson; charset=utf-8',
-        'Cache-Control': 'no-store',
-      });
-      const abort = new AbortController();
-      res.on('close', () => {
-        if (!res.writableEnded) abort.abort(); // client went away - stop the provider
-      });
-      const line = (obj) => {
-        if (!abort.signal.aborted) res.write(`${JSON.stringify(obj)}\n`);
-      };
-      line({ type: 'meta', provider: resolveProvider(config.ai) });
-      try {
-        const result = await ask(question.trim(), {
-          ...corpus, ai: config.ai, history,
-          onDelta: (text) => line({ type: 'delta', text }),
-          signal: abort.signal,
-        });
-        line({ type: 'done', ...result, conversationId: record(result) });
-      } catch (err) {
-        // an aborted provider call is the client leaving, not an error
-        if (!abort.signal.aborted) console.error(`[ask] ${err.message}`);
-        line({ type: 'error', error: err.message });
-      }
-      res.end();
-      return;
-    }
-
-    try {
-      const result = await ask(question.trim(), { ...corpus, ai: config.ai, history });
-      sendJson(res, 200, { ...result, conversationId: record(result) });
+      return askHistory.record({
+        id: payload.conversationId, history, question: question.trim(),
+        answer: result.answer, provider: result.provider, model: result.model,
+      }).id;
     } catch (err) {
-      console.error(`[ask] ${err.message}`);
-      sendJson(res, 502, { error: err.message });
+      console.error(`[ask] history write failed: ${err.message}`);
+      return null;
     }
-  });
+  };
+
+  if (payload?.stream === true) {
+    // NDJSON relay: {type:meta}, {type:delta}* then {type:done} or {type:error}.
+    // The status is committed before the provider runs, so provider failures
+    // ride an error line, not an HTTP code.
+    res.writeHead(200, {
+      'Content-Type': 'application/x-ndjson; charset=utf-8',
+      'Cache-Control': 'no-store',
+    });
+    const abort = new AbortController();
+    res.on('close', () => {
+      if (!res.writableEnded) abort.abort(); // client went away - stop the provider
+    });
+    const line = (obj) => {
+      if (!abort.signal.aborted) res.write(`${JSON.stringify(obj)}\n`);
+    };
+    line({ type: 'meta', provider: resolveProvider(config.ai) });
+    try {
+      const result = await ask(question.trim(), {
+        ...corpus, ai: config.ai, history,
+        onDelta: (text) => line({ type: 'delta', text }),
+        signal: abort.signal,
+      });
+      line({ type: 'done', ...result, conversationId: record(result) });
+    } catch (err) {
+      // an aborted provider call is the client leaving, not an error
+      if (!abort.signal.aborted) console.error(`[ask] ${err.message}`);
+      line({ type: 'error', error: err.message });
+    }
+    res.end();
+    return;
+  }
+
+  try {
+    const result = await ask(question.trim(), { ...corpus, ai: config.ai, history });
+    sendJson(res, 200, { ...result, conversationId: record(result) });
+  } catch (err) {
+    console.error(`[ask] ${err.message}`);
+    sendJson(res, 502, { error: err.message });
+  }
 }
 
 // hook payloads can be big (whole tool inputs/responses ride along) - higher
 // cap than /api/ask, and the tracker whitelists/truncates before persisting
-function handleHookEvent(req, res) {
-  let body = '';
-  let size = 0;
-  req.on('data', (chunk) => {
-    size += chunk.length;
-    if (size > 256 * 1024) { req.destroy(); return; }
-    body += chunk;
-  });
-  req.on('end', () => {
-    let raw;
-    try {
-      raw = JSON.parse(body);
-    } catch {
-      return sendJson(res, 400, { error: 'body must be a JSON hook payload' });
-    }
-    if (!raw || typeof raw !== 'object') return sendJson(res, 400, { error: 'not an object' });
-    agentTracker.record(raw);
-    broadcast('agents', agentTracker.snapshot());
-    res.writeHead(204);
-    res.end();
-  });
+async function handleHookEvent(req, res) {
+  const body = await readBody(req, res, 256 * 1024);
+  if (body === null) return;
+  let raw;
+  try {
+    raw = JSON.parse(body);
+  } catch {
+    return sendJson(res, 400, { error: 'body must be a JSON hook payload' });
+  }
+  if (!raw || typeof raw !== 'object') return sendJson(res, 400, { error: 'not an object' });
+  agentTracker.record(raw);
+  broadcast('agents', agentTracker.snapshot());
+  res.writeHead(204);
+  res.end();
 }
 
-function handleCronUpsert(req, res) {
-  let body = '';
-  let size = 0;
-  req.on('data', (chunk) => {
-    size += chunk.length;
-    if (size > 64 * 1024) { req.destroy(); return; }
-    body += chunk;
-  });
-  req.on('end', () => {
-    let def;
-    try {
-      def = JSON.parse(body);
-    } catch {
-      return sendJson(res, 400, { error: 'body must be a JSON cron definition' });
-    }
-    try {
-      const job = cronRunner.upsert(def);
-      sendJson(res, 200, { job });
-    } catch (err) {
-      sendJson(res, 400, { error: err.message });
-    }
-  });
+async function handleCronUpsert(req, res) {
+  const body = await readBody(req, res, 64 * 1024);
+  if (body === null) return;
+  let def;
+  try {
+    def = JSON.parse(body);
+  } catch {
+    return sendJson(res, 400, { error: 'body must be a JSON cron definition' });
+  }
+  try {
+    const job = cronRunner.upsert(def);
+    sendJson(res, 200, { job });
+  } catch (err) {
+    sendJson(res, 400, { error: err.message });
+  }
 }
 
 async function handleCronRun(id, res) {
@@ -361,34 +341,27 @@ async function handleCronRun(id, res) {
   }
 }
 
-function handleIconAssign(req, res) {
-  let body = '';
-  let size = 0;
-  req.on('data', (chunk) => {
-    size += chunk.length;
-    if (size > 4 * 1024) { req.destroy(); return; }
-    body += chunk;
-  });
-  req.on('end', () => {
-    let payload;
-    try {
-      payload = JSON.parse(body);
-    } catch {
-      return sendJson(res, 400, { error: 'body must be JSON: {"agent": "...", "icon": "..." | null}' });
-    }
-    const { agent, icon } = payload ?? {};
-    if (typeof agent !== 'string' || !SLUG_RE.test(agent)) {
-      return sendJson(res, 400, { error: 'agent must be a node id' });
-    }
-    if (icon !== null && (typeof icon !== 'string' || !ICON_NAME_RE.test(icon))) {
-      return sendJson(res, 400, { error: 'icon must be a catalog name or null' });
-    }
-    if (icon === null) delete iconAssignments[agent];
-    else iconAssignments[agent] = icon;
-    writeJson(ICON_FILE, iconAssignments);
-    broadcast('icons', { assignments: iconAssignments });
-    sendJson(res, 200, { assignments: iconAssignments });
-  });
+async function handleIconAssign(req, res) {
+  const body = await readBody(req, res, 4 * 1024);
+  if (body === null) return;
+  let payload;
+  try {
+    payload = JSON.parse(body);
+  } catch {
+    return sendJson(res, 400, { error: 'body must be JSON: {"agent": "...", "icon": "..." | null}' });
+  }
+  const { agent, icon } = payload ?? {};
+  if (typeof agent !== 'string' || !SLUG_RE.test(agent)) {
+    return sendJson(res, 400, { error: 'agent must be a node id' });
+  }
+  if (icon !== null && (typeof icon !== 'string' || !ICON_NAME_RE.test(icon))) {
+    return sendJson(res, 400, { error: 'icon must be a catalog name or null' });
+  }
+  if (icon === null) delete iconAssignments[agent];
+  else iconAssignments[agent] = icon;
+  writeJson(ICON_FILE, iconAssignments);
+  broadcast('icons', { assignments: iconAssignments });
+  sendJson(res, 200, { assignments: iconAssignments });
 }
 
 function sendJson(res, status, obj) {

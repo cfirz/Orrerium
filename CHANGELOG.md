@@ -14,6 +14,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   relays the answer as NDJSON delta lines; the plain JSON shape is
   unchanged for scripts.
 
+### Fixed
+
+- Oversized POST bodies now receive a 413 response instead of a silently
+  dropped connection.
+
 ## [0.2.0] - 2026-08-18
 
 ### Added
