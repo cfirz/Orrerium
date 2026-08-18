@@ -406,8 +406,8 @@ body:not([data-panel="brain"]) .motion-toggle { display: none; }
    users who switch the OS "animation effects" off (SPI_GETCLIENTAREAANIMATION =
    false) make Chrome report reduce on every page, so without the escape hatch the
    dashboard silently shows a dead graph on a machine that is merely tuned for
-   performance. The topbar Motion toggle stamps data-motion="full" to opt back in;
-   the OS preference still wins by default. */
+   performance. So data-motion="full" is the default the topbar Motion toggle
+   stamps; picking Auto hands the decision back to the OS preference. */
 @media (prefers-reduced-motion: reduce) {
   :root:not([data-motion="full"]) .spark,
   :root:not([data-motion="full"]) .node-spark,

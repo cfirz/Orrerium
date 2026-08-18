@@ -197,10 +197,12 @@ for (const b of layoutBtns) b.addEventListener('click', () => setLayout(b.datase
 
 // --- motion toggle --------------------------------------------------------
 
-// Only rendered when the browser reports prefers-reduced-motion: reduce, since
-// that is the only case where the sparks are being suppressed and the choice
-// means anything. See the note above the guard in style.css for why this feature
-// gets an escape hatch that ordinary decoration would not.
+// Motion defaults to "full" so a first run shows live traffic everywhere: the
+// sparks ARE the live-activity read-out, not decoration on top of it. The toggle
+// is only rendered when the browser reports prefers-reduced-motion: reduce, since
+// that is the only case where picking Auto changes anything. See the note above
+// the guard in style.css for why this feature gets an escape hatch that ordinary
+// decoration would not.
 {
   const wrap = document.getElementById('motion-toggle');
   const btns = [...wrap.querySelectorAll('.seg-btn')];
@@ -214,7 +216,7 @@ for (const b of layoutBtns) b.addEventListener('click', () => setLayout(b.datase
   for (const b of btns) b.addEventListener('click', () => setMotion(b.dataset.motion));
 
   const saved = localStorage.getItem('orrerium.motion');
-  setMotion(saved === 'full' ? 'full' : 'auto');
+  setMotion(saved === 'auto' ? 'auto' : 'full'); // default On; only an explicit Auto opts out
   if (matchMedia('(prefers-reduced-motion: reduce)').matches) wrap.setAttribute('data-relevant', '');
 }
 

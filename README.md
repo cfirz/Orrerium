@@ -92,8 +92,9 @@ That's it. Whenever you're ready:
   [Agents board](#agents-board) hooks are installed and a Claude Code session
   runs.
 - **Graph is static (no spark animations)** — your OS has reduced motion
-  switched on; on Windows, turning "animation effects" on in Settings brings
-  the motion back.
+  switched on *and* the topbar **motion** toggle is set to Auto; switch it back
+  to **On** (the default). On Windows, turning "animation effects" on in
+  Settings also brings the motion back.
 
 ## Point it at your own vault
 
@@ -278,10 +279,13 @@ panes, so a per-frame animation would silently freeze. Travelling dots are a
 near-zero dash on a copy of the edge with `pathLength="100"`, so one
 `stroke-dashoffset` keyframe fits every edge length; the orbit rotates about the
 node's local origin via `transform-box: view-box; transform-origin: 0 0`. Under
-`prefers-reduced-motion: reduce` the decorative traffic withdraws entirely and
-live nodes still read as live through their static styling. (Windows users:
+`prefers-reduced-motion: reduce` the decorative traffic can withdraw entirely,
+with live nodes still reading as live through their static styling — but that
+branch is opt-in: motion defaults to **On** and only an explicit Auto on the
+topbar **motion** toggle hands the decision back to the OS. (Windows users:
 switching the OS "animation effects" off makes Chrome report `reduce` for every
-page, which also switches this branch on.)
+page, which is exactly why the sparks — the live-activity read-out itself — do
+not disappear by default.)
 
 **Icons** (`#/icons`) assigns hand-authored pixel faces
 ([public/js/icons.js](public/js/icons.js), 12×12 grids as data — no asset
