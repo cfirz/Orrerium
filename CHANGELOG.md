@@ -13,6 +13,28 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   (Claude API and `claude` CLI). `POST /api/ask` with `"stream": true`
   relays the answer as NDJSON delta lines; the plain JSON shape is
   unchanged for scripts.
+- Multi-provider ask-your-brain: `ai.provider` now also takes `openai`,
+  `gemini`, `grok`, and `ollama` — one OpenAI-compatible adapter behind a
+  provider registry, keys environment-only (`OPENAI_API_KEY`,
+  `GEMINI_API_KEY`/`GOOGLE_API_KEY`, `XAI_API_KEY`), with new `ai.baseUrl`
+  and `ai.keyEnv` overrides for local models and proxies. A missing key now
+  fails fast with a message naming the env var instead of a provider 401.
+- Agents board sources: every hook event carries a `source`
+  (`claude-code` by default), `POST /api/hook-event?source=<slug>` selects
+  a per-tool dialect adapter, and any tool can feed the board with a small
+  normalized event shape. Cards wear source badges and a source filter row
+  appears once a second tool reports.
+- Hook installers for other CLIs: `node hooks/install.js --tool gemini`
+  wires Gemini CLI (`~/.gemini/settings.json`), `--tool codex` sets Codex
+  CLI's `notify` in `~/.codex/config.toml` (turn-complete cards — all Codex
+  exposes), and `--print` emits the snippet for manual wiring.
+
+### Changed
+
+- `/api/ask` responses name the provider by service (`anthropic`, `openai`,
+  `gemini`, `grok`, `ollama`, `cli`); `"api"` remains accepted in config as
+  an alias for `anthropic`, and `ai.model` now defaults per provider
+  instead of globally to `claude-opus-5`.
 
 ## [0.2.0] - 2026-08-18
 

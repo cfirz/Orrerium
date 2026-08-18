@@ -91,8 +91,8 @@ That's it. Whenever you're ready:
   non-default port, also set `ORRERIUM_PORT` where the hooks run.
 - **Errors on startup** — almost always Node older than 20; check `node -v`.
 - **Agents / Flows / Icons panels are empty** — expected until the
-  [Agents board](#agents-board) hooks are installed (`node hooks/install.js`)
-  and a Claude Code session runs.
+  [Agents board](#agents-board) hooks are installed (`node hooks/install.js`,
+  optionally `--tool gemini` / `--tool codex`) and an agent session runs.
 - **Graph is static (no spark animations)** — your OS has reduced motion
   switched on *and* the topbar **motion** toggle is set to Auto; switch it back
   to **On** (the default). On Windows, turning "animation effects" on in
@@ -143,8 +143,10 @@ notes, and start capturing.
 | `host` / `port` | `127.0.0.1` / `4321` | Where the dashboard listens — keep it on loopback, see [SECURITY.md](SECURITY.md) |
 | `excludeDirs` | `.obsidian`, `.claude`, `.git` | Folders never scanned (skills are scanned explicitly) |
 | `applicationTags` | `unity`, `python`, … | Tags that become APPLICATION nodes on the outer ring |
-| `ai.provider` | `auto` | `api` (Claude API via `ANTHROPIC_API_KEY`), `cli` (local `claude` CLI / Claude Code login), or `auto` (api if the key is set, else cli) |
-| `ai.model` | `claude-opus-5` | Model for the API provider (the CLI uses its own configured model) |
+| `ai.provider` | `auto` | `anthropic`, `openai`, `gemini`, `grok`, `ollama`, `cli` (local `claude` CLI / Claude Code login), or `auto` — the first provider whose API key is set, else `cli`. (`api` is the pre-0.3 alias for `anthropic`) |
+| `ai.model` | per provider | Overrides the provider's default model (see [AI features](#ai-features-optional)); **required** for `ollama` (the CLI uses its own configured model) |
+| `ai.baseUrl` | per provider | Overrides the endpoint base — an Ollama port, LM Studio, vLLM, a proxy: any OpenAI-compatible server |
+| `ai.keyEnv` | per provider | *Name* of the env var holding the API key, if not the provider's usual one (the key value itself never goes in config) |
 | `claudeScan.roots` | `[]` | Dirs whose children are scanned (one level) for `.claude/{skills,agents,commands}` — absolute paths, e.g. `["C:/code"]` or `["/Users/you/code"]` |
 | `claudeScan.globalDir` | `~/.claude` | The global Claude dir, scanned the same way |
 | `claudeScan.settingsPath` | `~/.claude/settings.json` | Read for `skillOverrides` so disabled skills render dormant |
@@ -154,16 +156,38 @@ notes, and start capturing.
 
 Two features talk to an LLM; everything else is fully offline.
 
-- **Ask-your-brain** (`#/brain`, ask box) needs either `ANTHROPIC_API_KEY` set in
-  the environment, or the [Claude Code](https://claude.com/claude-code) CLI
-  installed and logged in (`ai.provider` picks; `auto` prefers the key).
-- **Crons** (`#/crons`) runs headless `claude -p` jobs and always needs the CLI.
+- **Ask-your-brain** (`#/brain`, ask box) works with any one of these — set the
+  key in the environment (never in a file) and, if you want a specific one,
+  `ai.provider` in `config.json`:
+
+  | Provider | Key env var | Default model |
+  |---|---|---|
+  | `anthropic` | `ANTHROPIC_API_KEY` | `claude-opus-5` |
+  | `openai` | `OPENAI_API_KEY` | `gpt-5.6-terra` |
+  | `gemini` | `GEMINI_API_KEY` (or `GOOGLE_API_KEY`) | `gemini-3.7-flash` |
+  | `grok` | `XAI_API_KEY` | `grok-4.5` |
+  | `ollama` | none — local | none: set `ai.model` |
+  | `cli` | none — the [Claude Code](https://claude.com/claude-code) CLI's own login | the CLI's configured model |
+
+  `auto` (the default) walks `anthropic → openai → gemini → grok` and picks the
+  first key it finds, else falls back to `cli`. `GOOGLE_API_KEY` counts only when
+  `gemini` is chosen explicitly — it exists on too many machines for unrelated
+  reasons to trigger auto-detection. Local models: set
+  `"provider": "ollama", "model": "llama3"` (and `baseUrl` for a non-default
+  port); any other OpenAI-compatible server works via `baseUrl` on any of the
+  openai-dialect providers.
+- **Crons** (`#/crons`) runs headless `claude -p` jobs and always needs the
+  Claude CLI, whatever `ai.provider` says.
 
 **Privacy note:** ask-your-brain builds its context from the *entire vault* —
-every question ships your whole vault's text to the configured provider (the
-Anthropic API, or whatever the `claude` CLI is logged into). Don't point Orrerium
-at a vault you wouldn't send there. Very large vaults may also exceed the model's
-context window; there is no retrieval fallback yet.
+every question ships your whole vault's text to **whichever provider is
+configured** (Anthropic, OpenAI, Google, xAI, your local Ollama, or whatever the
+`claude` CLI is logged into). Don't point Orrerium at a vault you wouldn't send
+there. **Cost note:** the Anthropic path caches the vault context explicitly, so
+repeat questions are cheap; the other cloud providers cache implicitly and
+partially, so a large vault may re-bill more often. Very large vaults may also
+exceed the model's context window — roomiest on Gemini, tightest on local Ollama
+models — and there is no retrieval fallback yet.
 
 ## Architecture (10 lines)
 
@@ -174,7 +198,7 @@ context window; there is no retrieval fallback yet.
 - `lib/vault.js` — pure parser: frontmatter (vault dialect) + wikilink/md-link extraction, plus `.claude/skills/*/SKILL.md` as **routine** nodes. Importable by agents and CLIs; no http/fs.watch in it.
 - `lib/graph.js` — pure: notes → `{nodes, edges, warnings}`; undirected dedupe, ghost nodes for unresolved wikilinks, degree; **application** nodes derived from `applicationTags` with tag edges to every note carrying the tag; routine edges from real markdown links and `x.md` mentions in skill bodies.
 - `lib/watch.js` — debounced recursive `fs.watch`; every change triggers a full re-parse (the vault is small; incremental bookkeeping is not worth bugs).
-- `lib/ask.js` — ask-your-brain: whole-vault context + question to an LLM. Two zero-dependency providers: raw HTTP to the Claude API (with prompt caching and `refusal` handling) or the local `claude` CLI. Both stream — the API via SSE, the CLI via `--output-format stream-json` (with a buffered retry for CLIs too old for the flags) — and `/api/ask` relays the deltas as NDJSON when the client asks to stream; a dropped connection cancels the provider call. Answers cite notes as `[[wikilinks]]`, which the UI renders as graph navigation.
+- `lib/ask.js` — ask-your-brain: whole-vault context + question to an LLM. Zero-dependency providers behind one registry: raw HTTP to the Claude API (with prompt caching and `refusal` handling), one OpenAI-compatible Chat Completions adapter covering OpenAI/Gemini/Grok/Ollama (only base URL, key env var and default model differ), or the local `claude` CLI. All stream — the APIs via SSE, the CLI via `--output-format stream-json` (with a buffered retry for CLIs too old for the flags) — and `/api/ask` relays the deltas as NDJSON when the client asks to stream; a dropped connection cancels the provider call. A missing API key fails before any request, naming the env var. Answers cite notes as `[[wikilinks]]`, which the UI renders as graph navigation.
 - `public/js/graph-view.js` — SVG graph with two layouts: **Rings** (default — concentric orbits with README at the core, then root docs, PROJECTS, LESSONS, MACHINE, IDEAS, TEMPLATES, ROUTINES, and hexagonal APPLICATIONS outermost; notes are angularly sorted toward the projects they link to) and **Force** (Obsidian-style d3-force; position cache keeps live reloads from re-exploding the layout).
 - `public/js/agent-activity.js` — live agent traffic on the graph, in both layouts (see "Live agent activity"). Pure derivation: the agents SSE snapshot reduces to a set of live nodes and live edges, which `graph-view.js` paints.
 - `public/js/note-panel.js` — marked with a wikilink tokenizer; every in-vault link navigates the graph.
@@ -186,33 +210,73 @@ context window; there is no retrieval fallback yet.
 
 ## Agents board
 
-*This whole section is Claude Code-specific and entirely optional — without the
-hook setup below, the Agents, Flows and Icons panels are simply empty.*
+*This whole section is entirely optional — without a hook setup below, the
+Agents, Flows and Icons panels are simply empty.*
 
-`#/agents` shows every Claude Code session on the machine live: the
-orchestrator's current activity, spawned subagents and their status, tool and
-error counts. It is fed by Claude Code hooks posting to `/api/hook-event`
-through [hooks/emit.js](hooks/emit.js) — a fire-and-forget emitter that always
-exits 0 and swallows every failure, so sessions never notice when Orrerium is
-down (a PreToolUse hook that exits non-zero would block the tool call).
+`#/agents` shows agent sessions on the machine live: the orchestrator's current
+activity, spawned subagents and their status, tool and error counts. Claude Code
+gets the full picture; Gemini CLI and Codex CLI can report too (with the
+fidelity their hook systems allow), and anything else can feed the board through
+a small generic event shape. Every event carries a `source`, each card wears a
+source badge, and a source filter row appears once a second tool reports.
 
-To enable, run the installer once from your clone:
+Events reach the board by POSTing to `/api/hook-event` through
+[hooks/emit.js](hooks/emit.js) — a fire-and-forget relay that always exits 0 and
+swallows every failure, so sessions never notice when Orrerium is down (a
+Claude Code PreToolUse hook that exits non-zero would block the tool call).
+
+To enable, run the installer once from your clone, per tool:
 
 ```
 node hooks/install.js
 ```
 
-It merges hook entries for all seven events into `~/.claude/settings.json`,
-shows the plan and asks before writing, and backs the file up beside itself
-first — every other setting and every existing hook stays untouched.
-`--dry-run` previews without writing, `--uninstall` takes the hooks back out,
-and re-running it after moving the clone fixes up the stale paths.
-Already-running Claude Code sessions pick the hooks up on their next restart.
+```
+node hooks/install.js --tool gemini
+```
 
-Prefer to wire it by hand? Add hook entries for **all seven** events —
+```
+node hooks/install.js --tool codex
+```
+
+- **Claude Code** (the default) merges hook entries for all seven events into
+  `~/.claude/settings.json` — full live activity: prompts, tools, subagents.
+- **Gemini CLI** merges its six hook events (`SessionStart`, `BeforeAgent`,
+  `BeforeTool`, `AfterTool`, `AfterAgent`, `SessionEnd`) into
+  `~/.gemini/settings.json`, tagged `--source=gemini-cli`; the server maps that
+  vocabulary onto the canonical one, so cards show prompts and tool activity.
+- **Codex CLI** sets the single top-level `notify` key in `~/.codex/config.toml`.
+  Codex only notifies when a turn *completes*, so its cards are honest but
+  coarse — one card per turn with the prompt, no live tool activity; that is all
+  Codex exposes. The installer refuses to clobber a `notify` you already have
+  (Codex supports exactly one) and prints manual instructions instead.
+
+Every install shows the plan and asks before writing, and backs the file up
+beside itself first — every other setting and every existing hook stays
+untouched. `--dry-run` previews without writing, `--uninstall` takes the hooks
+back out, `--print` emits the config snippet for wiring by hand, and re-running
+after moving the clone fixes up the stale paths. Already-running sessions pick
+the hooks up on their next restart.
+
+**Any other tool** (Grok CLI, CI jobs, your own scripts) can feed the board by
+POSTing events in the normalized shape to
+`/api/hook-event?source=<its-slug>` (slug: lowercase `[a-z0-9-]`, max 32):
+
+```json
+{ "ts": 1755500000000, "event": "PreToolUse", "sessionId": "run-42",
+  "cwd": "/repo", "tool": "compile", "prompt": "...", "input": { "command": "..." } }
+```
+
+`event` is one of `SessionStart`, `UserPromptSubmit`, `PreToolUse`,
+`PostToolUse`, `SubagentStop`, `Stop`, `SessionEnd`; everything else is
+optional and truncated server-side. `hooks/emit.js --source=<slug>` relays
+stdin (or a single JSON argument) there, or POST directly.
+
+Prefer to wire Claude Code by hand? Add hook entries for **all seven** events —
 `SessionStart`, `UserPromptSubmit`, `PreToolUse` (matcher `*`), `PostToolUse`
 (matcher `*`), `SubagentStop`, `Stop`, `SessionEnd` — each running the same
-command (replace the path with your clone's absolute path):
+command (replace the path with your clone's absolute path; `--print` generates
+exactly this for every tool):
 
 ```json
 "hooks": {
@@ -243,25 +307,30 @@ command (replace the path with your clone's absolute path):
 If Orrerium listens on a non-default port, set `ORRERIUM_PORT` in the environment
 the hooks run in.
 
-Events are whitelisted and truncated server-side (`lib/agents.js`), appended to
-`data/agent-events/YYYY-MM-DD.ndjson`, and replayed on server start so a
-restart never blanks the board. Subagent spawns are detected as `PreToolUse` of
+Events are translated per source, whitelisted and truncated server-side
+(`lib/agents.js` — one adapter per wire dialect, everything downstream speaks
+the canonical shape), appended to `data/agent-events/YYYY-MM-DD.ndjson`, and
+replayed on server start so a restart never blanks the board (pre-0.3 log lines
+without a `source` replay as `claude-code`). Foreign session ids are normalized
+to URL-safe form at ingest. Subagent spawns are detected as `PreToolUse` of
 the `Agent` tool (older Claude Code builds called it `Task`, and log days from
 back then still hold those events, so both names count — `isSubagentTool` in
 `lib/agents.js`). Only `SubagentStop` closes the oldest working subagent:
 `PostToolUse` is not a completion, because a backgrounded agent returns its
 handle within milliseconds and keeps running.
 
-The desktop app emits hook events of its own, so every session in the snapshot
-carries a `kind` (`classifySession` in `lib/agents.js`): `work` for real
-sessions, `startup` for the throwaway sessions the app opens and closes on
+The Claude desktop app emits hook events of its own, so every session in the
+snapshot carries a `kind` (`classifySession` in `lib/agents.js`): `work` for
+real sessions, `startup` for the throwaway sessions the app opens and closes on
 launch (Start+End pair, no prompt, no tools — one per recent project plus one
 rooted at the home dir), and `housekeeping` for the bare-`SessionEnd` bursts
 its periodic tick emits while finalizing old sessions (~every 2h at :28 past
-the hour while the app is open). The board's filter chips (All · Live · Idle ·
-Ended · System) keep the two system kinds out of every view except System,
-which shows them labeled for what they are. Cron runs are never misclassified:
-the runner posts a synthetic prompt event.
+the hour while the app is open). Those two heuristics apply only to
+`claude-code` sessions — another tool's promptless ended session stays `work`.
+The board's filter chips (All · Live · Idle · Ended · System) keep the two
+system kinds out of every view except System, which shows them labeled for what
+they are. Cron runs are never misclassified: the runner posts a synthetic
+prompt event (tagged `source: cron`).
 
 **Flows** (`#/flows`) replays the same log as a timeline: subagent spans stack
 above the orchestrator lane (parallel agents get parallel lanes, packed
@@ -328,10 +397,10 @@ green/red, ○ upcoming), and per-run output.
 
 - `GET /api/graph` → `{ generatedAt, vaultPath, nodes, edges, warnings }`
 - `GET /api/note/:slug` → `{ id, path, folder, type, frontmatter, markdown }` (also serves scanned claude assets, e.g. `DemoApp.qa-agent`)
-- `POST /api/ask` `{ question, history? }` → `{ answer, provider, model }` (markdown with `[[wikilink]]` citations; `history` is prior `{role, content}` turns)
+- `POST /api/ask` `{ question, history? }` → `{ answer, provider, model }` (markdown with `[[wikilink]]` citations; `history` is prior `{role, content}` turns). Since 0.3, `provider` is the service name (`anthropic`, `openai`, `gemini`, `grok`, `ollama`, `cli`) — scripts that matched the old `"api"` value should match `"anthropic"`.
 - `POST /api/ask` with `"stream": true` → `application/x-ndjson`: one `{"type":"meta","provider"}` line, `{"type":"delta","text"}` lines as the answer generates, closed by `{"type":"done", answer, provider, model, conversationId}` (authoritative full text) or `{"type":"error", error}`. The ask panel uses this; the plain JSON shape above stays for scripts.
-- `GET /api/agents` → `{ generatedAt, sessions: [...] }` — the live board snapshot
-- `POST /api/hook-event` — Claude Code hook payloads (whitelisted, truncated, logged)
+- `GET /api/agents` → `{ generatedAt, sessions: [...] }` — the live board snapshot; each session carries its `source`
+- `POST /api/hook-event[?source=<slug>]` — agent hook payloads (whitelisted, truncated, logged). No `source` means `claude-code`; `gemini-cli`, `codex` and `cron` select their dialect adapters; any other slug is read as the normalized generic shape (see [Agents board](#agents-board))
 - `GET /api/flows` → `{ sessions: [...] }` — replayable sessions from the last fortnight's log
 - `GET /api/flows/:sessionId` → `{ sessionId, flow: { start, end, lanes, spans, ticks, prompts } }`
 - `GET /api/icons` / `POST /api/icons/assign` `{ agent, icon|null }` → `{ assignments }`
@@ -364,6 +433,7 @@ see [public/vendor/README.md](public/vendor/README.md).
 
 ## Roadmap
 
-Still open: a retrieval step for vaults too big for one context window; a
-stats/usage panel; configurable folder→type mapping for vaults with different
-conventions.
+Still open: a retrieval step for vaults too big for one context window (all the
+more relevant now that local Ollama models, with their smaller windows, are a
+supported provider); a stats/usage panel; configurable folder→type mapping for
+vaults with different conventions.
