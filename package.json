@@ -1,6 +1,6 @@
 {
   "name": "orrerium",
-  "version": "0.1.0",
+  "version": "0.2.0",
   "description": "Local-first dashboard over a markdown knowledge vault: interactive graph, projects board, inbox triage, ask-your-brain. Zero dependencies.",
   "type": "module",
   "license": "MIT",
