@@ -7,6 +7,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- Ask-your-brain answers stream in as they generate, from both providers
+  (Claude API and `claude` CLI). `POST /api/ask` with `"stream": true`
+  relays the answer as NDJSON delta lines; the plain JSON shape is
+  unchanged for scripts.
+
 ## [0.2.0] - 2026-08-18
 
 ### Added
