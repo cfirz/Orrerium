@@ -75,6 +75,17 @@ test('a question sharing no token with the vault falls back to type order', () =
   assert.deepEqual(sel.notes.map((n) => n.id), ['idea-note', 'proj-note']); // original array order
 });
 
+test('a budget smaller than every note still ships the best one', () => {
+  const notes = [
+    note('engine', { rawBody: `rocket ${'x'.repeat(400)}` }),
+    note('garden', { rawBody: `soil ${'y'.repeat(400)}` }),
+  ];
+  const sel = selectContext({ question: 'rocket', notes, budgetTokens: 10 });
+  assert.deepEqual(sel.notes.map((n) => n.id), ['engine']); // best seed, over budget beats empty
+  const blank = selectContext({ question: 'zzz', notes, budgetTokens: 10 });
+  assert.equal(blank.notes.length, 1); // fallback path too
+});
+
 test('prior user turns steer the selection', () => {
   const notes = [
     note('engine', { rawBody: 'rocket engine design' }),
