@@ -16,6 +16,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Stop button on the ask box: cancels the in-flight answer mid-stream,
   aborts the provider call server-side, and drops the stopped turn from
   the conversation.
+- `folderTypes` in `config.json` maps custom folder names (PARA,
+  Zettelkasten, …) onto the five built-in note types; the graph, boards
+  and colours follow the mapping with no other changes.
 
 ### Changed
 

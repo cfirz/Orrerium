@@ -1,5 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
+import { mkdirSync, mkdtempSync, writeFileSync } from 'node:fs';
+import { tmpdir } from 'node:os';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import {
@@ -106,4 +108,39 @@ test('parseVault on fixture vault', () => {
   const template = byId.get('template-note');
   assert.equal(template.type, 'template'); // inline comment stripped
   assert.equal(template.name, 'template-slug');
+});
+
+// a throwaway vault whose notes carry no frontmatter `type:`, so the type can
+// only come from the folder map (the shared fixture sets types explicitly)
+function makeVault(files) {
+  const dir = mkdtempSync(path.join(tmpdir(), 'orrerium-vault-'));
+  for (const [rel, body] of Object.entries(files)) {
+    mkdirSync(path.dirname(path.join(dir, rel)), { recursive: true });
+    writeFileSync(path.join(dir, rel), body);
+  }
+  return dir;
+}
+
+test('folder-derived types follow the default map', () => {
+  const dir = makeVault({
+    'projects/rover.md': '# Rover\n',
+    'elsewhere/stray.md': '# Stray\n',
+  });
+  const byId = new Map(parseVault(dir).notes.map((n) => [n.id, n]));
+  assert.equal(byId.get('rover').type, 'project');
+  assert.equal(byId.get('stray').type, 'root'); // unknown folder falls through
+});
+
+test('a custom folderTypes map replaces the default and frontmatter still wins', () => {
+  const dir = makeVault({
+    'docs/guide.md': '# Guide\n',
+    'projects/rover.md': '# Rover\n',
+    'docs/special.md': '---\ntype: machine\n---\n# Special\n',
+  });
+  const byId = new Map(
+    parseVault(dir, { folderTypes: { docs: 'idea' } }).notes.map((n) => [n.id, n]),
+  );
+  assert.equal(byId.get('guide').type, 'idea'); // custom mapping
+  assert.equal(byId.get('rover').type, 'root'); // replacement: projects/ no longer mapped
+  assert.equal(byId.get('special').type, 'machine'); // frontmatter beats the map
 });

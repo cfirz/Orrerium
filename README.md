@@ -123,7 +123,9 @@ them, and its [CONVENTIONS.md](starter-vault/CONVENTIONS.md) explains the why):
 
 - **Type folders** — notes live in `projects/`, `lessons/`, `machine/`, `ideas/`,
   `templates/`; the folder gives the node its type, colour, and ring. Notes in
-  other folders still render, just untyped.
+  other folders still render, just untyped. A vault with different folder names
+  (PARA, Zettelkasten, …) can map them onto the same five types via
+  `folderTypes` in `config.json`.
 - **A root `README.md`** — sits at the centre of the Rings layout as the vault's
   index.
 - **Frontmatter** — `name`, one-line quoted `description`, `type`, `updated`;
@@ -143,6 +145,7 @@ notes, and start capturing.
 | `host` / `port` | `127.0.0.1` / `4321` | Where the dashboard listens — keep it on loopback, see [SECURITY.md](SECURITY.md) |
 | `excludeDirs` | `.obsidian`, `.claude`, `.git` | Folders never scanned (skills are scanned explicitly) |
 | `applicationTags` | `unity`, `python`, … | Tags that become APPLICATION nodes on the outer ring |
+| `folderTypes` | `projects` → `project`, … | Folder name → note type for vaults with different conventions; values must be one of the five built-in types, and a provided map **replaces** the default (start from a copy of it) |
 | `ai.provider` | `auto` | `api` (Claude API via `ANTHROPIC_API_KEY`), `cli` (local `claude` CLI / Claude Code login), or `auto` (api if the key is set, else cli) |
 | `ai.model` | `claude-opus-5` | Model for the API provider (the CLI uses its own configured model) |
 | `claudeScan.roots` | `[]` | Dirs whose children are scanned (one level) for `.claude/{skills,agents,commands}` — absolute paths, e.g. `["C:/code"]` or `["/Users/you/code"]` |
@@ -368,5 +371,4 @@ see [public/vendor/README.md](public/vendor/README.md).
 ## Roadmap
 
 Still open: a retrieval step for vaults too big for one context window; a
-stats/usage panel; configurable folder→type mapping for vaults with different
-conventions.
+stats/usage panel.

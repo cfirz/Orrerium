@@ -29,7 +29,7 @@ let claudeAssets = { items: [], warnings: [] }; // cross-repo scan, refreshed on
 let claudeKey = null;
 
 function rebuild() {
-  const parsed = parseVault(config.vaultPath, { excludeDirs: config.excludeDirs });
+  const parsed = parseVault(config.vaultPath, { excludeDirs: config.excludeDirs, folderTypes: config.folderTypes });
   const { skills, warnings: skillWarnings } = parseSkills(config.vaultPath);
   corpus = { notes: parsed.notes, skills };
   graph = {

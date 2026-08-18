@@ -4,6 +4,13 @@
   "port": 4321,
   "excludeDirs": [".obsidian", ".claude", ".git"],
   "applicationTags": ["unity", "python", "android", "windows", "obsidian", "git"],
+  "folderTypes": {
+    "projects": "project",
+    "lessons": "lesson",
+    "machine": "machine",
+    "ideas": "idea",
+    "templates": "template"
+  },
   "ai": {
     "provider": "auto",
     "model": "claude-opus-5",
