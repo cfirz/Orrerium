@@ -1,5 +1,5 @@
 // Icons: pixel-face gallery with click-to-assign. Pick a face, click an
-// agent; the assignment is BrainOS-owned state (data/icon-assignments.json)
+// agent; the assignment is Orrerium-owned state (data/icon-assignments.json)
 // and every consumer (board, graph) updates over the bus.
 import { ICONS, renderIcon } from './icons.js';
 import { escapeHtml } from './md.js';

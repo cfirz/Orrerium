@@ -8,7 +8,7 @@ export function initPanels({ onShow }) {
   const buttons = [...document.querySelectorAll('.nav-btn')];
 
   function apply(name) {
-    localStorage.setItem('brainos.panel', name);
+    localStorage.setItem('orrerium.panel', name);
     document.body.dataset.panel = name;
     for (const b of buttons) b.classList.toggle('active', b.dataset.panel === name);
     for (const sec of document.querySelectorAll('.panel-section')) {
@@ -34,7 +34,7 @@ export function initPanels({ onShow }) {
     if (name && name !== document.body.dataset.panel) apply(name);
   });
 
-  const saved = localStorage.getItem('brainos.panel');
+  const saved = localStorage.getItem('orrerium.panel');
   show(fromHash() ?? (PANELS.includes(saved) ? saved : 'brain'));
 
   return { show };

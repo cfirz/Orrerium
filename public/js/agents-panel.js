@@ -64,7 +64,7 @@ export function createAgentsPanel({ getIcon } = {}) {
       cards.innerHTML = `
         <div class="agents-empty">
           <p>No sessions logged yet.</p>
-          <p>Wire the emitter into <code>~/.claude/settings.json</code> (see the BrainOS README,
+          <p>Wire the emitter into <code>~/.claude/settings.json</code> (see the Orrerium README,
           "Agents board") and any Claude Code session on this machine will appear here live.</p>
         </div>`;
       return;

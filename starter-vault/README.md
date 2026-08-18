@@ -4,9 +4,9 @@ One vault for everything that spans projects on this machine: what each project 
 lessons that transfer between them, machine/toolchain facts, and the idea backlog.
 Plain markdown, agent-first — renders in Obsidian, works as flat files.
 
-> This is the **starter vault** bundled with BrainOS — a small, fabricated example of the
+> This is the **starter vault** bundled with Orrerium — a small, fabricated example of the
 > system so the dashboard has something to show on first launch. Copy it somewhere, replace
-> the sample notes with your own, and point BrainOS at it (`BRAINOS_VAULT` or `config.json`).
+> the sample notes with your own, and point Orrerium at it (`ORRERIUM_VAULT` or `config.json`).
 
 - **Find things:** `rg "^description:" <path-to-this-vault> -g "*.md"` — one line per note.
   Scope it to a folder (`.../lessons`) once you know which kind of note you want.

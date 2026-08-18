@@ -65,7 +65,7 @@ test('applyEvent: full session lifecycle with parallel subagents', () => {
 });
 
 test('tracker: persists NDJSON, replays after restart, marks stale', () => {
-  const dataDir = mkdtempSync(path.join(tmpdir(), 'brainos-agents-'));
+  const dataDir = mkdtempSync(path.join(tmpdir(), 'orrerium-agents-'));
   let clock = 1000;
   const now = () => clock;
 
@@ -112,7 +112,7 @@ test('classifySession separates work from app plumbing', () => {
   assert.equal(classifySession(sessions.get('cron-sid')), 'work');
 
   // snapshot carries the kind
-  const dataDir = mkdtempSync(path.join(tmpdir(), 'brainos-agents-'));
+  const dataDir = mkdtempSync(path.join(tmpdir(), 'orrerium-agents-'));
   const t = createAgentTracker({ dataDir, now: () => 1000 });
   t.record(hookEvt('SessionStart', {}, 1000));
   t.record(hookEvt('SessionEnd', {}, 1200));

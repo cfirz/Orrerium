@@ -5,7 +5,7 @@ import { tmpdir } from 'node:os';
 import path from 'node:path';
 import { appendLine, readJson, readLines, writeJson } from '../lib/store.js';
 
-const dir = mkdtempSync(path.join(tmpdir(), 'brainos-store-'));
+const dir = mkdtempSync(path.join(tmpdir(), 'orrerium-store-'));
 
 test('writeJson/readJson round-trip, creating parent dirs', () => {
   const file = path.join(dir, 'nested', 'doc.json');

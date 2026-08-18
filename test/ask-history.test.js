@@ -5,7 +5,7 @@ import { tmpdir } from 'node:os';
 import path from 'node:path';
 import { createAskHistory } from '../lib/ask-history.js';
 
-const tempDir = () => mkdtempSync(path.join(tmpdir(), 'brainos-askhist-'));
+const tempDir = () => mkdtempSync(path.join(tmpdir(), 'orrerium-askhist-'));
 
 // a clock that ticks forward on every call, so updatedAt ordering is stable
 function ticker(start = 1_700_000_000_000, step = 1000) {

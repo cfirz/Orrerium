@@ -1,13 +1,13 @@
 ---
 name: local-dev-ports
-description: "STALE (2026-06) — port map predates the router change; 4321 BrainOS, 8080 orbit-tracker dev server."
+description: "STALE (2026-06) — port map predates the router change; 4321 Orrerium, 8080 orbit-tracker dev server."
 type: machine
 updated: 2026-06-30
 tags: []
 status: stale
 ---
 
-Local port assignments on this box: 4321 BrainOS, 8080 the [[orbit-tracker]] dev server,
+Local port assignments on this box: 4321 Orrerium, 8080 the [[orbit-tracker]] dev server,
 5432 the shared Postgres container.
 
 **Quirks:** written before the router was replaced — the port-forward rules it assumed are

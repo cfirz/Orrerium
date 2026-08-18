@@ -78,7 +78,7 @@ export function createCronsPanel() {
     head.innerHTML = `
       <h1>CRONS</h1>
       <div class="board-sub">${jobs.length} job${jobs.length === 1 ? '' : 's'} · ${jobs.filter((j) => j.enabled).length} enabled</div>
-      <div class="board-hint">Scheduled <code>claude -p</code> runs. The scheduler lives inside BrainOS — jobs
+      <div class="board-hint">Scheduled <code>claude -p</code> runs. The scheduler lives inside Orrerium — jobs
       fire while the server runs; <b>catch-up</b> jobs run once at startup when an occurrence was missed.</div>`;
 
     listEl.innerHTML = jobs.length ? jobs.map((j) => `

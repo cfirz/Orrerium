@@ -1,6 +1,6 @@
-# Contributing to BrainOS
+# Contributing to Orrerium
 
-BrainOS is a personal tool published so other people can use it. That shapes which
+Orrerium is a personal tool published so other people can use it. That shapes which
 contributions fit. Bug reports and fixes are very welcome, and so are portability
 fixes — it is developed on Windows, so macOS and Linux papercuts are genuinely
 useful. Large new features are a harder sell, because every panel has to keep
@@ -22,9 +22,9 @@ what AI agents working in this repo read — a change to any of them belongs in 
   single-file build with its license alongside it — see
   [public/vendor/README.md](public/vendor/README.md). If a change looks like it needs
   a package, that is exactly what to raise in the issue first.
-- **Never write the vault.** BrainOS reads the vault over recursive `fs.watch` and
+- **Never write the vault.** Orrerium reads the vault over recursive `fs.watch` and
   stays strictly read-only toward it. Someone's notes are their own, and a dashboard
-  bug must never be able to corrupt them. BrainOS's own state belongs in `data/`.
+  bug must never be able to corrupt them. Orrerium's own state belongs in `data/`.
 - **Keep `lib/vault.js` and `lib/graph.js` pure.** Both are importable by agents and
   CLIs with no server running. No http, no `fs.watch`, no process state.
 
@@ -51,7 +51,7 @@ linter, and no formatter config — match the surrounding code instead.
 
 ## AI-assisted contributions
 
-These are fine, and used heavily here — much of BrainOS was written with Claude Code.
+These are fine, and used heavily here — much of Orrerium was written with Claude Code.
 The one rule is that you have read and understood what you are submitting, and that it
 runs and passes tests on your machine. A PR you cannot explain in review will be
 closed: unreviewed generated output costs more to triage than it contributes.

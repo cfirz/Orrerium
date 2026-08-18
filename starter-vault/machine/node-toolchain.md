@@ -13,6 +13,6 @@ shims exist without a global install.
 scripts must resolve `node` themselves or hardcode the nvm bin dir.
 
 **How to apply:** `nvm use` in every terminal before running project scripts; zero-dep repos
-(like BrainOS) run on bare `node` and need nothing else.
+(like Orrerium) run on bare `node` and need nothing else.
 
 Related: [[local-dev-ports]]

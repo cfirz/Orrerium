@@ -373,5 +373,5 @@ server.on('error', (err) => {
 });
 
 server.listen(config.port, config.host, () => {
-  console.log(`BrainOS listening on http://${config.host}:${config.port}  (vault: ${config.vaultPath})`);
+  console.log(`Orrerium listening on http://${config.host}:${config.port}  (vault: ${config.vaultPath})`);
 });

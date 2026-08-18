@@ -1,5 +1,5 @@
 @echo off
-rem BrainOS launcher: starts the server and opens the dashboard in the browser.
+rem Orrerium launcher: starts the server and opens the dashboard in the browser.
 rem Double-click this file, or run it from a terminal. Close the window (or Ctrl+C) to stop.
 setlocal EnableExtensions
 
@@ -10,13 +10,13 @@ cd /d "%~dp0"
 
 where node >nul 2>nul
 if errorlevel 1 (
-  echo [BrainOS] node was not found on PATH. Install Node 20+ from https://nodejs.org and retry.
+  echo [Orrerium] node was not found on PATH. Install Node 20+ from https://nodejs.org and retry.
   goto :fail
 )
 
 node -e "process.exit(parseInt(process.versions.node,10)>=20?0:1)"
 if errorlevel 1 (
-  for /f "delims=" %%V in ('node -v') do echo [BrainOS] Node %%V is too old - BrainOS needs Node 20+.
+  for /f "delims=" %%V in ('node -v') do echo [Orrerium] Node %%V is too old - Orrerium needs Node 20+.
   goto :fail
 )
 
@@ -36,7 +36,7 @@ set "URL=http://%BROWSERHOST%:%PORT%"
 
 call :isUp
 if not errorlevel 1 (
-  echo [BrainOS] Already running at %URL% - opening the app.
+  echo [Orrerium] Already running at %URL% - opening the app.
   start "" "%URL%"
   goto :done
 )
@@ -44,12 +44,12 @@ if not errorlevel 1 (
 rem Background copy of this script opens the browser once the server answers.
 start "" /b cmd /c ""%~f0" --open-when-ready %HOST% %PORT%"
 
-echo [BrainOS] Starting server on %URL%  (Ctrl+C or close this window to stop)
+echo [Orrerium] Starting server on %URL%  (Ctrl+C or close this window to stop)
 node server.js
 set "EXITCODE=%errorlevel%"
 if not "%EXITCODE%"=="0" (
   echo.
-  echo [BrainOS] Server exited with code %EXITCODE%.
+  echo [Orrerium] Server exited with code %EXITCODE%.
   goto :fail
 )
 goto :done

@@ -76,9 +76,9 @@ test('buildDirIndex maps the vault root itself to the core note', () => {
   const graph = { ...GRAPH, vaultPath: 'C:/My Vaults/Brain', nodes: [...GRAPH.nodes, { id: 'README', type: 'root' }] };
   const idx = buildDirIndex(graph);
   assert.equal(idx.get('c:/my vaults/brain'), 'README');
-  // a session anywhere under the vault resolves, and BrainOS next door does not collide
+  // a session anywhere under the vault resolves, and Orrerium next door does not collide
   assert.equal(resolveAnchor('C:/My Vaults/Brain/lessons', idx), 'README');
-  assert.equal(resolveAnchor('C:/My Vaults/BrainOS', idx), null);
+  assert.equal(resolveAnchor('C:/My Vaults/Orrerium', idx), null);
   // no core note in the graph -> no phantom entry
   assert.equal(buildDirIndex({ ...GRAPH, vaultPath: 'C:/My Vaults/Brain' }).get('c:/my vaults/brain'), undefined);
 });

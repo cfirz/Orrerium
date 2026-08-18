@@ -1,6 +1,6 @@
 # Security
 
-BrainOS is a local-first tool. It binds to `127.0.0.1` by default and has no
+Orrerium is a local-first tool. It binds to `127.0.0.1` by default and has no
 authentication, no accounts, and no multi-user model. It assumes a single trusted
 person on a single machine, and everything below follows from that assumption.
 

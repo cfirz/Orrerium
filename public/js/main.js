@@ -182,14 +182,14 @@ function connectEvents() {
 const layoutBtns = [...document.querySelectorAll('#layout-toggle .seg-btn')];
 
 function setLayout(m) {
-  localStorage.setItem('brainos.layout', m);
+  localStorage.setItem('orrerium.layout', m);
   for (const b of layoutBtns) b.classList.toggle('active', b.dataset.layout === m);
   view.setLayout(m);
 }
 
 for (const b of layoutBtns) b.addEventListener('click', () => setLayout(b.dataset.layout));
 {
-  const saved = localStorage.getItem('brainos.layout');
+  const saved = localStorage.getItem('orrerium.layout');
   const initial = saved === 'force' || saved === 'rings' ? saved : 'rings';
   for (const b of layoutBtns) b.classList.toggle('active', b.dataset.layout === initial);
   view.setLayout(initial); // no data yet - just sets the mode before first load
@@ -206,14 +206,14 @@ for (const b of layoutBtns) b.addEventListener('click', () => setLayout(b.datase
   const btns = [...wrap.querySelectorAll('.seg-btn')];
 
   function setMotion(m) {
-    localStorage.setItem('brainos.motion', m);
+    localStorage.setItem('orrerium.motion', m);
     document.documentElement.dataset.motion = m;
     for (const b of btns) b.classList.toggle('active', b.dataset.motion === m);
   }
 
   for (const b of btns) b.addEventListener('click', () => setMotion(b.dataset.motion));
 
-  const saved = localStorage.getItem('brainos.motion');
+  const saved = localStorage.getItem('orrerium.motion');
   setMotion(saved === 'full' ? 'full' : 'auto');
   if (matchMedia('(prefers-reduced-motion: reduce)').matches) wrap.setAttribute('data-relevant', '');
 }
@@ -223,7 +223,7 @@ loadGraph();
 connectEvents();
 
 // console/agent-inspectable handle (RUBRIC ethos: the dashboard is debuggable from outside)
-window.brainos = {
+window.orrerium = {
   view,
   agentActivity,
   selectNode,

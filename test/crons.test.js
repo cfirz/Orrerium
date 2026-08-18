@@ -75,7 +75,7 @@ function fakeSpawn(exitCode, output, delayMs = 5) {
 const AI = { cliCommand: 'claude', timeoutMs: 60_000 };
 
 test('runner: upsert validates, runNow records a run, list reflects it', async () => {
-  const dataDir = mkdtempSync(path.join(tmpdir(), 'brainos-crons-'));
+  const dataDir = mkdtempSync(path.join(tmpdir(), 'orrerium-crons-'));
   const events = [];
   const runner = createCronRunner({
     dataDir,
@@ -105,7 +105,7 @@ test('runner: upsert validates, runNow records a run, list reflects it', async (
 });
 
 test('runner: failed run recorded, catch-up fires once on start', async () => {
-  const dataDir = mkdtempSync(path.join(tmpdir(), 'brainos-crons-'));
+  const dataDir = mkdtempSync(path.join(tmpdir(), 'orrerium-crons-'));
   const seed = createCronRunner({ dataDir, ai: AI, spawnImpl: fakeSpawn(1, 'boom') });
   seed.upsert({ name: 'Nightly', schedule: 'daily@00:01', prompt: 'do it', catchUp: true });
   const rec = await seed.runNow('nightly');
@@ -131,7 +131,7 @@ test('runner: failed run recorded, catch-up fires once on start', async () => {
   runner.stop();
 
   // a job that never ran at all IS owed a catch-up (daily@00:01 has passed)
-  const dataDir2 = mkdtempSync(path.join(tmpdir(), 'brainos-crons-'));
+  const dataDir2 = mkdtempSync(path.join(tmpdir(), 'orrerium-crons-'));
   const ends2 = [];
   const runner2 = createCronRunner({
     dataDir: dataDir2,
@@ -148,7 +148,7 @@ test('runner: failed run recorded, catch-up fires once on start', async () => {
 });
 
 test('runner: overlapping runNow is refused while running', async () => {
-  const dataDir = mkdtempSync(path.join(tmpdir(), 'brainos-crons-'));
+  const dataDir = mkdtempSync(path.join(tmpdir(), 'orrerium-crons-'));
   const runner = createCronRunner({ dataDir, ai: AI, spawnImpl: fakeSpawn(0, 'slow', 50) });
   runner.upsert({ name: 'Slow', schedule: 'every 30m', prompt: 'p' });
   const first = runner.runNow('slow');

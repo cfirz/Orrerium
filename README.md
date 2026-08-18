@@ -1,4 +1,4 @@
-# BrainOS
+# Orrerium
 
 Local-first dashboard over a markdown knowledge vault: no build step, zero npm
 dependencies, all state in files that both humans and AI agents can read.
@@ -27,17 +27,17 @@ third session quietly triaging the vault's own inbox.*
 ## Quick start
 
 ```
-git clone https://github.com/cfirz/BrainOS
-cd BrainOS
+git clone https://github.com/cfirz/Orrerium
+cd Orrerium
 node server.js
 ```
 
 Then open http://127.0.0.1:4321. Requires Node 20+ (uses `fs.watch` recursive
-and `node:test`). There is nothing to install — with no configuration, BrainOS
+and `node:test`). There is nothing to install — with no configuration, Orrerium
 boots against the bundled demo vault in [starter-vault/](starter-vault/).
 
-Prefer a double-click? [brainos.bat](brainos.bat) (Windows) and
-[brainos.sh](brainos.sh) (macOS/Linux) start the server, open the browser once
+Prefer a double-click? [orrerium.bat](orrerium.bat) (Windows) and
+[orrerium.sh](orrerium.sh) (macOS/Linux) start the server, open the browser once
 it answers, and reuse an already-running instance instead of starting a second
 one. The server runs in that window — Ctrl+C or closing it stops the server.
 
@@ -52,20 +52,20 @@ Three steps, all offline — no accounts, no API keys, nothing to install.
 node -v      # should print v20.x or higher
 ```
 
-**2. Download BrainOS** — on the
-[GitHub page](https://github.com/cfirz/BrainOS), click **Code → Download ZIP**
+**2. Download Orrerium** — on the
+[GitHub page](https://github.com/cfirz/Orrerium), click **Code → Download ZIP**
 and unzip it anywhere. Or, if you use git:
 
 ```
-git clone https://github.com/cfirz/BrainOS
+git clone https://github.com/cfirz/Orrerium
 ```
 
-**3. Open it** — double-click [brainos.bat](brainos.bat) (Windows) or run
-[brainos.sh](brainos.sh) (macOS/Linux):
+**3. Open it** — double-click [orrerium.bat](orrerium.bat) (Windows) or run
+[orrerium.sh](orrerium.sh) (macOS/Linux):
 
 ```
-cd BrainOS
-./brainos.sh     # macOS / Linux — Windows: double-click brainos.bat
+cd Orrerium
+./orrerium.sh     # macOS / Linux — Windows: double-click orrerium.bat
 ```
 
 Your browser opens on a small demo vault — click any node to read its note.
@@ -84,9 +84,9 @@ That's it. Whenever you're ready:
 - **`vaultPath is not a directory`** — the vault path you set doesn't exist
   (or `config.json` points somewhere stale). Remember `~` is not expanded in
   `config.json`.
-- **`Port 4321 is already in use`** — another BrainOS (or something else) owns
+- **`Port 4321 is already in use`** — another Orrerium (or something else) owns
   the port. Stop it, or set `port` in `config.json`. If hooks should reach a
-  non-default port, also set `BRAINOS_PORT` where the hooks run.
+  non-default port, also set `ORRERIUM_PORT` where the hooks run.
 - **Errors on startup** — almost always Node older than 20; check `node -v`.
 - **Agents / Flows / Icons panels are empty** — expected until the
   [Agents board](#agents-board) hooks are installed and a Claude Code session
@@ -97,17 +97,17 @@ That's it. Whenever you're ready:
 
 ## Point it at your own vault
 
-Any folder of markdown files works, and BrainOS treats it as **strictly
-read-only** — it never touches your notes. Either set `BRAINOS_VAULT` when
+Any folder of markdown files works, and Orrerium treats it as **strictly
+read-only** — it never touches your notes. Either set `ORRERIUM_VAULT` when
 starting the server:
 
 ```
-BRAINOS_VAULT=/path/to/your/vault node server.js     # macOS / Linux
+ORRERIUM_VAULT=/path/to/your/vault node server.js     # macOS / Linux
 ```
 
 ```
-set BRAINOS_VAULT=C:\path\to\your\vault && node server.js    # Windows cmd
-$env:BRAINOS_VAULT="C:\path\to\your\vault"; node server.js   # PowerShell
+set ORRERIUM_VAULT=C:\path\to\your\vault && node server.js    # Windows cmd
+$env:ORRERIUM_VAULT="C:\path\to\your\vault"; node server.js   # PowerShell
 ```
 
 or, for a permanent setting, copy
@@ -136,7 +136,7 @@ notes, and start capturing.
 
 | Key | Default | Meaning |
 |---|---|---|
-| `vaultPath` | `starter-vault` | Markdown vault to visualize (relative paths resolve from the repo root; `BRAINOS_VAULT` overrides) |
+| `vaultPath` | `starter-vault` | Markdown vault to visualize (relative paths resolve from the repo root; `ORRERIUM_VAULT` overrides) |
 | `host` / `port` | `127.0.0.1` / `4321` | Where the dashboard listens — keep it on loopback, see [SECURITY.md](SECURITY.md) |
 | `excludeDirs` | `.obsidian`, `.claude`, `.git` | Folders never scanned (skills are scanned explicitly) |
 | `applicationTags` | `unity`, `python`, … | Tags that become APPLICATION nodes on the outer ring |
@@ -158,7 +158,7 @@ Two features talk to an LLM; everything else is fully offline.
 
 **Privacy note:** ask-your-brain builds its context from the *entire vault* —
 every question ships your whole vault's text to the configured provider (the
-Anthropic API, or whatever the `claude` CLI is logged into). Don't point BrainOS
+Anthropic API, or whatever the `claude` CLI is logged into). Don't point Orrerium
 at a vault you wouldn't send there. Very large vaults may also exceed the model's
 context window; there is no retrieval fallback yet.
 
@@ -166,7 +166,7 @@ context window; there is no retrieval fallback yet.
 
 - `server.js` — plain `node:http`: static files (`Cache-Control: no-cache` — live edits, no stale modules), JSON routes, one SSE route.
 - `lib/sse.js` — the SSE channel: named events (`broadcast(event, payload)`), one client set, keepalive pings. `public/js/bus.js` is its client twin: one shared `EventSource`, panels subscribe by event name.
-- `lib/store.js` — BrainOS-owned writable state under `data/` (gitignored): atomic JSON writes (tmp+rename) and NDJSON append logs. The vault stays read-only.
+- `lib/store.js` — Orrerium-owned writable state under `data/` (gitignored): atomic JSON writes (tmp+rename) and NDJSON append logs. The vault stays read-only.
 - `lib/claude-scan.js` — cross-repo scanner: `.claude/{skills,agents,commands}` across `claudeScan.roots` + the global dir become **agent**/**command**/**routine** nodes (namespaced ids like `DemoApp.qa-agent`, short `label` for display), merged onto the graph with one `scan` edge to the repo's vault project note (matched on `dir` frontmatter) or a synthetic **repo** anchor.
 - `lib/vault.js` — pure parser: frontmatter (vault dialect) + wikilink/md-link extraction, plus `.claude/skills/*/SKILL.md` as **routine** nodes. Importable by agents and CLIs; no http/fs.watch in it.
 - `lib/graph.js` — pure: notes → `{nodes, edges, warnings}`; undirected dedupe, ghost nodes for unresolved wikilinks, degree; **application** nodes derived from `applicationTags` with tag edges to every note carrying the tag; routine edges from real markdown links and `x.md` mentions in skill bodies.
@@ -179,7 +179,7 @@ context window; there is no retrieval fallback yet.
 - `public/vendor/` — committed single-file builds of d3 and marked ([versions and licenses](public/vendor/README.md)).
 - The vault's `.obsidian/graph.json` was the design reference for colours/forces; it is **never read or written at runtime** (Obsidian clobbers it).
 - `public/js/panels.js` + `projects-panel.js` + `inbox-panel.js` — the dashboard shell: a topbar nav switches panels; the projects board renders from graph-node frontmatter (`status`, `dir`, tags, degree) and clicks through to the graph; the inbox view renders `inbox.md` captures and flags the triage threshold. The ask panel is multi-turn — prior Q/A pairs ride along with each request.
-- `window.brainos` in the browser console exposes the view, graph data and simulation for debugging.
+- `window.orrerium` in the browser console exposes the view, graph data and simulation for debugging.
 
 ## Agents board
 
@@ -190,7 +190,7 @@ hook setup below, the Agents, Flows and Icons panels are simply empty.*
 orchestrator's current activity, spawned subagents and their status, tool and
 error counts. It is fed by Claude Code hooks posting to `/api/hook-event`
 through [hooks/emit.js](hooks/emit.js) — a fire-and-forget emitter that always
-exits 0 and swallows every failure, so sessions never notice when BrainOS is
+exits 0 and swallows every failure, so sessions never notice when Orrerium is
 down (a PreToolUse hook that exits non-zero would block the tool call).
 
 To enable, add hook entries to `~/.claude/settings.json` for **all seven**
@@ -201,30 +201,30 @@ the same command (replace the path with your clone's absolute path):
 ```json
 "hooks": {
   "SessionStart": [{ "hooks": [
-    { "type": "command", "command": "node \"/path/to/BrainOS/hooks/emit.js\"", "timeout": 5 }
+    { "type": "command", "command": "node \"/path/to/Orrerium/hooks/emit.js\"", "timeout": 5 }
   ]}],
   "UserPromptSubmit": [{ "hooks": [
-    { "type": "command", "command": "node \"/path/to/BrainOS/hooks/emit.js\"", "timeout": 5 }
+    { "type": "command", "command": "node \"/path/to/Orrerium/hooks/emit.js\"", "timeout": 5 }
   ]}],
   "PreToolUse": [{ "matcher": "*", "hooks": [
-    { "type": "command", "command": "node \"/path/to/BrainOS/hooks/emit.js\"", "timeout": 5 }
+    { "type": "command", "command": "node \"/path/to/Orrerium/hooks/emit.js\"", "timeout": 5 }
   ]}],
   "PostToolUse": [{ "matcher": "*", "hooks": [
-    { "type": "command", "command": "node \"/path/to/BrainOS/hooks/emit.js\"", "timeout": 5 }
+    { "type": "command", "command": "node \"/path/to/Orrerium/hooks/emit.js\"", "timeout": 5 }
   ]}],
   "SubagentStop": [{ "hooks": [
-    { "type": "command", "command": "node \"/path/to/BrainOS/hooks/emit.js\"", "timeout": 5 }
+    { "type": "command", "command": "node \"/path/to/Orrerium/hooks/emit.js\"", "timeout": 5 }
   ]}],
   "Stop": [{ "hooks": [
-    { "type": "command", "command": "node \"/path/to/BrainOS/hooks/emit.js\"", "timeout": 5 }
+    { "type": "command", "command": "node \"/path/to/Orrerium/hooks/emit.js\"", "timeout": 5 }
   ]}],
   "SessionEnd": [{ "hooks": [
-    { "type": "command", "command": "node \"/path/to/BrainOS/hooks/emit.js\"", "timeout": 5 }
+    { "type": "command", "command": "node \"/path/to/Orrerium/hooks/emit.js\"", "timeout": 5 }
   ]}]
 }
 ```
 
-If BrainOS listens on a non-default port, set `BRAINOS_PORT` in the environment
+If Orrerium listens on a non-default port, set `ORRERIUM_PORT` in the environment
 the hooks run in.
 
 Events are whitelisted and truncated server-side (`lib/agents.js`), appended to
