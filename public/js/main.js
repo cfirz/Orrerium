@@ -195,6 +195,29 @@ for (const b of layoutBtns) b.addEventListener('click', () => setLayout(b.datase
   view.setLayout(initial); // no data yet - just sets the mode before first load
 }
 
+// --- motion toggle --------------------------------------------------------
+
+// Only rendered when the browser reports prefers-reduced-motion: reduce, since
+// that is the only case where the sparks are being suppressed and the choice
+// means anything. See the note above the guard in style.css for why this feature
+// gets an escape hatch that ordinary decoration would not.
+{
+  const wrap = document.getElementById('motion-toggle');
+  const btns = [...wrap.querySelectorAll('.seg-btn')];
+
+  function setMotion(m) {
+    localStorage.setItem('brainos.motion', m);
+    document.documentElement.dataset.motion = m;
+    for (const b of btns) b.classList.toggle('active', b.dataset.motion === m);
+  }
+
+  for (const b of btns) b.addEventListener('click', () => setMotion(b.dataset.motion));
+
+  const saved = localStorage.getItem('brainos.motion');
+  setMotion(saved === 'full' ? 'full' : 'auto');
+  if (matchMedia('(prefers-reduced-motion: reduce)').matches) wrap.setAttribute('data-relevant', '');
+}
+
 buildLegend();
 loadGraph();
 connectEvents();

@@ -71,7 +71,8 @@ body {
 
 /* topbar graph controls only apply to the brain panel */
 body:not([data-panel="brain"]) .search-wrap { display: none; }
-body:not([data-panel="brain"]) .layout-toggle { display: none; }
+body:not([data-panel="brain"]) .layout-toggle,
+body:not([data-panel="brain"]) .motion-toggle { display: none; }
 .search-wrap { margin-left: auto; display: flex; align-items: center; gap: 8px; }
 #search {
   background: var(--bg);
@@ -95,7 +96,10 @@ body:not([data-panel="brain"]) .layout-toggle { display: none; }
 .status-dot.down { background: var(--c-lesson); }
 
 /* ---------- layout toggle ---------- */
-.layout-toggle { display: flex; align-items: center; gap: 8px; }
+.layout-toggle, .motion-toggle { display: flex; align-items: center; gap: 8px; }
+.motion-toggle { margin-left: 14px; }
+/* the toggle only earns its space where the OS is actually suppressing motion */
+.motion-toggle:not([data-relevant]) { display: none; }
 .seg-label { color: var(--text-dim); font-size: 11px; text-transform: uppercase; letter-spacing: 1px; }
 .seg-btn {
   background: var(--bg);
@@ -395,11 +399,19 @@ body:not([data-panel="brain"]) .layout-toggle { display: none; }
 /* Under prefers-reduced-motion the decorative traffic stops: travelling dots and
    orbit rings withdraw (a frozen dash mid-edge reads as a broken render, not a
    calm one), the one-shot ripple is dropped, and live nodes still read as live
-   through the .live styling on the node itself. Note for Windows users: switching
-   the OS "animation effects" off makes Chrome report reduce for every page, which
-   also switches this branch on. */
+   through the .live styling on the node itself.
+
+   The guard is escapable, because for this feature "no motion" means "no feature":
+   the sparks ARE the live-activity read-out, not decoration on top of it. Windows
+   users who switch the OS "animation effects" off (SPI_GETCLIENTAREAANIMATION =
+   false) make Chrome report reduce on every page, so without the escape hatch the
+   dashboard silently shows a dead graph on a machine that is merely tuned for
+   performance. The topbar Motion toggle stamps data-motion="full" to opt back in;
+   the OS preference still wins by default. */
 @media (prefers-reduced-motion: reduce) {
-  .spark, .node-spark, .ripple { display: none; }
+  :root:not([data-motion="full"]) .spark,
+  :root:not([data-motion="full"]) .node-spark,
+  :root:not([data-motion="full"]) .ripple { display: none; }
 }
 
 /* ---------- note panel ---------- */
