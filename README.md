@@ -16,7 +16,13 @@ orbit, and live sessions light up the graph in real time (see
 [Agents board](#agents-board)). None of that is required — the vault dashboard
 works on its own.
 
-![The Brain graph on the bundled starter vault](docs/screenshot.png)
+![The Brain graph over an example vault: notes on the inner rings, the machine's skills, agents and commands on the outer ones, and two projects lit up cyan while their subagents work](docs/screenshot.gif)
+
+*Above, animated and live: an example vault — 23 lessons, 9 project pages,
+7 machine notes — plus a scanned Claude Code setup across eight repos. The cyan
+orbit rings mark nodes that are running right now, and each travelling dot is one
+working subagent's traffic: six on a WebGL game repo, four on a kids' game, and a
+third session quietly triaging the vault's own inbox.*
 
 ## Quick start
 
