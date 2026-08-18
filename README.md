@@ -174,7 +174,7 @@ context window; there is no retrieval fallback yet.
 - `lib/vault.js` — pure parser: frontmatter (vault dialect) + wikilink/md-link extraction, plus `.claude/skills/*/SKILL.md` as **routine** nodes. Importable by agents and CLIs; no http/fs.watch in it.
 - `lib/graph.js` — pure: notes → `{nodes, edges, warnings}`; undirected dedupe, ghost nodes for unresolved wikilinks, degree; **application** nodes derived from `applicationTags` with tag edges to every note carrying the tag; routine edges from real markdown links and `x.md` mentions in skill bodies.
 - `lib/watch.js` — debounced recursive `fs.watch`; every change triggers a full re-parse (the vault is small; incremental bookkeeping is not worth bugs).
-- `lib/ask.js` — ask-your-brain: whole-vault context + question to an LLM. Two zero-dependency providers: raw HTTP to the Claude API (with prompt caching and `refusal` handling) or the local `claude` CLI. Answers cite notes as `[[wikilinks]]`, which the UI renders as graph navigation.
+- `lib/ask.js` — ask-your-brain: whole-vault context + question to an LLM. Two zero-dependency providers: raw HTTP to the Claude API (with prompt caching and `refusal` handling) or the local `claude` CLI. Both stream — the API via SSE, the CLI via `--output-format stream-json` (with a buffered retry for CLIs too old for the flags) — and `/api/ask` relays the deltas as NDJSON when the client asks to stream; a dropped connection cancels the provider call. Answers cite notes as `[[wikilinks]]`, which the UI renders as graph navigation.
 - `public/js/graph-view.js` — SVG graph with two layouts: **Rings** (default — concentric orbits with README at the core, then root docs, PROJECTS, LESSONS, MACHINE, IDEAS, TEMPLATES, ROUTINES, and hexagonal APPLICATIONS outermost; notes are angularly sorted toward the projects they link to) and **Force** (Obsidian-style d3-force; position cache keeps live reloads from re-exploding the layout).
 - `public/js/agent-activity.js` — live agent traffic on the graph, in both layouts (see "Live agent activity"). Pure derivation: the agents SSE snapshot reduces to a set of live nodes and live edges, which `graph-view.js` paints.
 - `public/js/note-panel.js` — marked with a wikilink tokenizer; every in-vault link navigates the graph.
@@ -329,6 +329,7 @@ green/red, ○ upcoming), and per-run output.
 - `GET /api/graph` → `{ generatedAt, vaultPath, nodes, edges, warnings }`
 - `GET /api/note/:slug` → `{ id, path, folder, type, frontmatter, markdown }` (also serves scanned claude assets, e.g. `DemoApp.qa-agent`)
 - `POST /api/ask` `{ question, history? }` → `{ answer, provider, model }` (markdown with `[[wikilink]]` citations; `history` is prior `{role, content}` turns)
+- `POST /api/ask` with `"stream": true` → `application/x-ndjson`: one `{"type":"meta","provider"}` line, `{"type":"delta","text"}` lines as the answer generates, closed by `{"type":"done", answer, provider, model, conversationId}` (authoritative full text) or `{"type":"error", error}`. The ask panel uses this; the plain JSON shape above stays for scripts.
 - `GET /api/agents` → `{ generatedAt, sessions: [...] }` — the live board snapshot
 - `POST /api/hook-event` — Claude Code hook payloads (whitelisted, truncated, logged)
 - `GET /api/flows` → `{ sessions: [...] }` — replayable sessions from the last fortnight's log
@@ -363,6 +364,6 @@ see [public/vendor/README.md](public/vendor/README.md).
 
 ## Roadmap
 
-Still open: streaming ask answers; a retrieval step for vaults too big for one
-context window; a stats/usage panel; configurable folder→type mapping for vaults
-with different conventions.
+Still open: a retrieval step for vaults too big for one context window; a
+stats/usage panel; configurable folder→type mapping for vaults with different
+conventions.

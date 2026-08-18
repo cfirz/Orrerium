@@ -6,7 +6,7 @@ import { serveStatic } from './lib/static.js';
 import { parseVault, parseSkills, parseFrontmatter } from './lib/vault.js';
 import { buildGraph } from './lib/graph.js';
 import { watchVault } from './lib/watch.js';
-import { ask } from './lib/ask.js';
+import { ask, resolveProvider } from './lib/ask.js';
 import { sseHandler, broadcast } from './lib/sse.js';
 import { scanClaudeAssets, mergeClaudeAssets } from './lib/claude-scan.js';
 import { createAgentTracker } from './lib/agents.js';
@@ -248,19 +248,54 @@ function handleAsk(req, res) {
     const history = (Array.isArray(payload?.history) ? payload.history : [])
       .filter((h) => (h?.role === 'user' || h?.role === 'assistant') && typeof h?.content === 'string' && h.content.length <= 16000)
       .slice(-20);
-    try {
-      const result = await ask(question.trim(), { ...corpus, ai: config.ai, history });
-      let conversationId = null;
+    const record = (result) => {
+      // a disk hiccup must not turn a good answer into an error
       try {
-        conversationId = askHistory.record({
+        return askHistory.record({
           id: payload.conversationId, history, question: question.trim(),
           answer: result.answer, provider: result.provider, model: result.model,
         }).id;
       } catch (err) {
-        // a disk hiccup must not turn a good answer into an error
         console.error(`[ask] history write failed: ${err.message}`);
+        return null;
       }
-      sendJson(res, 200, { ...result, conversationId });
+    };
+
+    if (payload?.stream === true) {
+      // NDJSON relay: {type:meta}, {type:delta}* then {type:done} or {type:error}.
+      // The status is committed before the provider runs, so provider failures
+      // ride an error line, not an HTTP code.
+      res.writeHead(200, {
+        'Content-Type': 'application/x-ndjson; charset=utf-8',
+        'Cache-Control': 'no-store',
+      });
+      const abort = new AbortController();
+      res.on('close', () => {
+        if (!res.writableEnded) abort.abort(); // client went away - stop the provider
+      });
+      const line = (obj) => {
+        if (!abort.signal.aborted) res.write(`${JSON.stringify(obj)}\n`);
+      };
+      line({ type: 'meta', provider: resolveProvider(config.ai) });
+      try {
+        const result = await ask(question.trim(), {
+          ...corpus, ai: config.ai, history,
+          onDelta: (text) => line({ type: 'delta', text }),
+          signal: abort.signal,
+        });
+        line({ type: 'done', ...result, conversationId: record(result) });
+      } catch (err) {
+        // an aborted provider call is the client leaving, not an error
+        if (!abort.signal.aborted) console.error(`[ask] ${err.message}`);
+        line({ type: 'error', error: err.message });
+      }
+      res.end();
+      return;
+    }
+
+    try {
+      const result = await ask(question.trim(), { ...corpus, ai: config.ai, history });
+      sendJson(res, 200, { ...result, conversationId: record(result) });
     } catch (err) {
       console.error(`[ask] ${err.message}`);
       sendJson(res, 502, { error: err.message });

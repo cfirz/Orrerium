@@ -53,10 +53,42 @@ export function initAskPanel({ onNavigate }) {
       const res = await fetch('/api/ask', {
         method: 'POST',
         headers: { 'content-type': 'application/json' },
-        body: JSON.stringify({ question, history, conversationId }),
+        body: JSON.stringify({ question, history, conversationId, stream: true }),
       });
-      const data = await res.json();
-      if (!res.ok) throw new Error(data.error ?? `request failed (${res.status})`);
+      if (!res.ok) {
+        const data = await res.json().catch(() => null);
+        throw new Error(data?.error ?? `request failed (${res.status})`);
+      }
+      // NDJSON stream: meta, delta lines while the answer generates, then
+      // done (authoritative full text) or error. Render once per network
+      // batch, not per delta line, and only follow the scroll while the
+      // reader is already at the bottom.
+      const reader = res.body.getReader();
+      const decoder = new TextDecoder();
+      let buf = '';
+      let answer = '';
+      let data = null;
+      while (true) {
+        const { value, done: eof } = await reader.read();
+        buf += decoder.decode(value ?? new Uint8Array(), { stream: !eof });
+        const lines = buf.split('\n');
+        buf = eof ? '' : lines.pop();
+        let grew = false;
+        for (const l of lines) {
+          if (!l.trim()) continue;
+          const evt = JSON.parse(l);
+          if (evt.type === 'delta') { answer += evt.text; grew = true; }
+          else if (evt.type === 'done') data = evt;
+          else if (evt.type === 'error') throw new Error(evt.error);
+        }
+        if (grew && !data) {
+          const follow = card.scrollHeight - card.scrollTop - card.clientHeight < 48;
+          aEl.innerHTML = renderMarkdown(answer);
+          if (follow) scrollToEnd();
+        }
+        if (eof) break;
+      }
+      if (!data) throw new Error('the answer stream ended early');
       aEl.innerHTML = renderMarkdown(data.answer);
       // always adopt: a server that pruned/lost the id issues a fresh one
       conversationId = data.conversationId ?? conversationId;
