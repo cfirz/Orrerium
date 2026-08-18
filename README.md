@@ -1,5 +1,7 @@
 # Orrerium
 
+[![CI](https://github.com/cfirz/Orrerium/actions/workflows/ci.yml/badge.svg)](https://github.com/cfirz/Orrerium/actions/workflows/ci.yml)
+
 Local-first dashboard over a markdown knowledge vault: no build step, zero npm
 dependencies, all state in files that both humans and AI agents can read.
 
