@@ -2,3 +2,4 @@ node_modules/
 *.log
 data/
 config.json
+.claude/skills/readme-gif/SKILL.md
