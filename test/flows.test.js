@@ -50,6 +50,15 @@ test('buildFlow: unclosed span stays live', () => {
   assert.ok(flow.spans.every((s) => s.live && s.end === null));
 });
 
+test('source-tagged events flow through untouched', () => {
+  // events from other tools land in the same log with a source field; flows
+  // only key on the canonical event names and ignore the extra field
+  const sourced = EVENTS.map((e) => ({ ...e, source: 'gemini-cli' }));
+  const flow = buildFlow(sourced);
+  assert.equal(flow.spans.length, 3);
+  assert.equal(summarize(sourced).length, 1);
+});
+
 test('groupSessions + summarize', () => {
   const other = [
     { ts: 500, event: 'SessionStart', sessionId: 'other', cwd: 'C:/X/Y' },

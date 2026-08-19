@@ -4,6 +4,9 @@ import { existsSync, mkdirSync, mkdtempSync, readFileSync, readdirSync, writeFil
 import { tmpdir } from 'node:os';
 import path from 'node:path';
 import { EVENTS, applyInstall, applyUninstall, emitCommand, install } from '../hooks/install.js';
+import { applyInstall as applyInstallFor, installJson } from '../hooks/installers/shared.js';
+import { gemini } from '../hooks/installers/gemini.js';
+import { applyCodexToml, installToml, notifyLine } from '../hooks/installers/codex.js';
 
 const dir = mkdtempSync(path.join(tmpdir(), 'orrerium-hooks-'));
 const emitPath = path.join('E:', 'somewhere', 'Orrerium', 'hooks', 'emit.js');
@@ -128,4 +131,107 @@ test('a non-array event value is refused rather than clobbered', () => {
     () => applyInstall({ hooks: { Stop: { bad: true } } }, emitPath),
     /hooks\.Stop/,
   );
+});
+
+// --- gemini: the same JSON merge against its descriptor --------------------
+
+test('gemini install wires its six events with ms timeouts and the source tag', () => {
+  const file = path.join(dir, 'gemini', 'settings.json');
+  const result = installJson({ settingsPath: file, emitPath, tool: gemini });
+  assert.equal(result.changed, true);
+  for (const event of gemini.events) assert.equal(result.changes[event], 'added');
+  const settings = readSettings(file);
+  assert.deepEqual(Object.keys(settings.hooks), gemini.events);
+  const hook = settings.hooks.BeforeTool[0].hooks[0];
+  assert.equal(hook.timeout, 5000); // Gemini CLI counts in milliseconds
+  assert.ok(hook.command.endsWith('--source=gemini-cli'));
+  assert.equal('matcher' in settings.hooks.BeforeTool[0], false); // absent = every tool
+
+  // idempotent second run, merge-preserving like the claude path
+  const again = installJson({ settingsPath: file, emitPath, tool: gemini });
+  assert.equal(again.changed, false);
+});
+
+test('gemini repairs an entry that lost its --source tag', () => {
+  const flagless = {
+    hooks: { SessionStart: [{ hooks: [{ type: 'command', command: emitCommand(emitPath), timeout: 5000 }] }] },
+  };
+  const { settings, changes } = applyInstallFor(flagless, emitPath, gemini);
+  assert.equal(changes.SessionStart, 'updated');
+  assert.ok(settings.hooks.SessionStart[0].hooks[0].command.endsWith('--source=gemini-cli'));
+});
+
+test('gemini uninstall leaves user hooks and other tools untouched', () => {
+  const file = path.join(dir, 'gemini-un', 'settings.json');
+  mkdirSync(path.dirname(file), { recursive: true });
+  writeFileSync(file, JSON.stringify({
+    hooks: { BeforeTool: [{ hooks: [{ type: 'command', command: 'node mine.js' }] }] },
+  }), { flag: 'wx' });
+  installJson({ settingsPath: file, emitPath, tool: gemini });
+  const result = installJson({ settingsPath: file, emitPath, tool: gemini, uninstall: true });
+  assert.equal(result.changes.BeforeTool, 'removed');
+  const settings = readSettings(file);
+  assert.deepEqual(Object.keys(settings.hooks), ['BeforeTool']);
+  assert.equal(settings.hooks.BeforeTool[0].hooks[0].command, 'node mine.js');
+});
+
+// --- codex: the conservative TOML line edit --------------------------------
+
+test('codex: notify appended to an empty or top-level-only config', () => {
+  assert.deepEqual(applyCodexToml('', emitPath), {
+    text: `${notifyLine(emitPath)}\n`, change: 'added',
+  });
+  const { text, change } = applyCodexToml('model = "gpt-5.6-terra"\n', emitPath);
+  assert.equal(change, 'added');
+  assert.equal(text, `model = "gpt-5.6-terra"\n${notifyLine(emitPath)}\n`);
+});
+
+test('codex: notify lands in the top-level block, before any [section]', () => {
+  const { text } = applyCodexToml('model = "x"\n\n[profiles.fast]\nmodel = "y"\n', emitPath);
+  const notifyAt = text.indexOf('notify = ');
+  assert.ok(notifyAt >= 0 && notifyAt < text.indexOf('[profiles.fast]'));
+});
+
+test('codex: rewrites a stale clone path, no-ops when current', () => {
+  const stale = `notify = ["node", "/old/clone/Orrerium/hooks/emit.js", "--source=codex"]\n`;
+  const { text, change } = applyCodexToml(stale, emitPath);
+  assert.equal(change, 'updated');
+  assert.ok(text.startsWith(notifyLine(emitPath)));
+  assert.equal(applyCodexToml(text, emitPath).change, 'ok');
+});
+
+test('codex: a foreign notify is refused, and a section-level notify does not count', () => {
+  assert.throws(
+    () => applyCodexToml('notify = ["terminal-notifier"]\n', emitPath),
+    /exactly one/,
+  );
+  // notify under a [section] belongs to that section, not the top level
+  const { change } = applyCodexToml('[whatever]\nnotify = ["theirs"]\n', emitPath);
+  assert.equal(change, 'added');
+});
+
+test('codex: uninstall removes only our line; foreign and absent are none', () => {
+  const ours = `${notifyLine(emitPath)}\nmodel = "x"\n`;
+  const removed = applyCodexToml(ours, emitPath, { uninstall: true });
+  assert.equal(removed.change, 'removed');
+  assert.equal(removed.text.includes('notify'), false);
+  assert.equal(applyCodexToml('model = "x"\n', emitPath, { uninstall: true }).change, 'none');
+  assert.equal(applyCodexToml('notify = ["theirs"]\n', emitPath, { uninstall: true }).change, 'none');
+});
+
+test('codex: installToml writes atomically with a backup, dry run writes nothing', () => {
+  const file = path.join(dir, 'codex', 'config.toml');
+  mkdirSync(path.dirname(file), { recursive: true });
+  writeFileSync(file, 'model = "x"\n', { flag: 'wx' });
+  const dry = installToml({ settingsPath: file, emitPath, dryRun: true });
+  assert.equal(dry.changed, true);
+  assert.equal(readFileSync(file, 'utf8'), 'model = "x"\n');
+  const result = installToml({ settingsPath: file, emitPath });
+  assert.equal(result.changes.notify, 'added');
+  assert.ok(result.backupPath && existsSync(result.backupPath));
+  assert.ok(readFileSync(file, 'utf8').includes(notifyLine(emitPath)));
+  // a foreign notify aborts before any write
+  writeFileSync(file, 'notify = ["theirs"]\n');
+  assert.throws(() => installToml({ settingsPath: file, emitPath }), /exactly one/);
+  assert.equal(readFileSync(file, 'utf8'), 'notify = ["theirs"]\n');
 });

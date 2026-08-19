@@ -1,5 +1,6 @@
-// Agents board: one card per Claude Code session, fed live by hook events
-// over the bus. Empty until the hooks in ~/.claude/settings.json are enabled.
+// Agents board: one card per coding-agent session (Claude Code, Gemini CLI,
+// Codex, crons, or anything POSTing the generic shape), fed live by hook
+// events over the bus. Empty until at least one tool's hooks are installed.
 import { escapeHtml } from './md.js';
 
 // filter id -> [label, predicate over a snapshot session]
@@ -21,8 +22,15 @@ export function createAgentsPanel({ getIcon } = {}) {
   const cards = document.getElementById('agents-cards');
   let lastSnapshot = null;
   let filter = 'all';
+  let sourceFilter = 'all';
 
   head.addEventListener('click', (e) => {
+    const srcBtn = e.target.closest('[data-source-filter]');
+    if (srcBtn) {
+      sourceFilter = srcBtn.dataset.sourceFilter;
+      if (lastSnapshot) render(lastSnapshot);
+      return;
+    }
     const btn = e.target.closest('[data-filter]');
     if (!btn) return;
     filter = btn.dataset.filter;
@@ -43,29 +51,42 @@ export function createAgentsPanel({ getIcon } = {}) {
 
   function render(snapshot) {
     lastSnapshot = snapshot;
-    // kind arrives from /api/agents; an older server just means nothing is filtered
-    const sessions = (snapshot?.sessions ?? []).map((s) => ({ kind: 'work', ...s }));
+    // kind/source arrive from /api/agents; an older server just means nothing
+    // is filtered and everything reads as claude-code
+    const sessions = (snapshot?.sessions ?? []).map((s) => ({ kind: 'work', source: 'claude-code', ...s }));
+    const sources = [...new Set(sessions.map((s) => s.source))].sort();
+    if (sourceFilter !== 'all' && !sources.includes(sourceFilter)) sourceFilter = 'all';
+    const bySource = sourceFilter === 'all' ? sessions : sessions.filter((s) => s.source === sourceFilter);
     const active = sessions.filter((s) => s.status === 'active' && !s.stale).length;
     const work = sessions.filter((s) => s.kind === 'work');
-    const shown = sessions.filter(FILTERS.find(([id]) => id === filter)[2]);
+    const shown = bySource.filter(FILTERS.find(([id]) => id === filter)[2]);
+
+    // the source row only appears once a second tool actually reports
+    const sourceRow = sources.length < 2 ? '' : `
+      <div class="agents-filters agents-sources">${['all', ...sources].map((id) => `
+        <button class="seg-btn${id === sourceFilter ? ' active' : ''}" data-source-filter="${id}">${escapeHtml(id)}
+          <span class="chip-count">${id === 'all' ? sessions.length : sessions.filter((s) => s.source === id).length}</span></button>`).join('')}
+      </div>`;
 
     head.innerHTML = `
       <h1>AGENTS</h1>
       <div class="board-sub">${work.length} session${work.length === 1 ? '' : 's'} today · ${active} live</div>
-      <div class="board-hint">Every Claude Code session on this machine reports here through the
-      <code>hooks/emit.js</code> hook — orchestrators, their subagents, and what they are running.
-      System is the desktop app's own plumbing: startup artifacts and housekeeping closures.</div>
+      <div class="board-hint">Every agent session on this machine — Claude Code, Gemini CLI, Codex,
+      crons, or anything speaking the generic event shape — reports here through the
+      <code>hooks/emit.js</code> relay: orchestrators, their subagents, and what they are running.
+      System is the Claude desktop app's own plumbing: startup artifacts and housekeeping closures.</div>
       <div class="agents-filters">${FILTERS.map(([id, label, pred]) => `
         <button class="seg-btn${id === filter ? ' active' : ''}" data-filter="${id}">${label}
-          <span class="chip-count">${sessions.filter(pred).length}</span></button>`).join('')}
-      </div>`;
+          <span class="chip-count">${bySource.filter(pred).length}</span></button>`).join('')}
+      </div>${sourceRow}`;
 
     if (sessions.length === 0) {
       cards.innerHTML = `
         <div class="agents-empty">
           <p>No sessions logged yet.</p>
-          <p>Wire the emitter into <code>~/.claude/settings.json</code> (see the Orrerium README,
-          "Agents board") and any Claude Code session on this machine will appear here live.</p>
+          <p>Run <code>node hooks/install.js</code> to wire Claude Code into this board
+          (<code>--tool gemini</code> and <code>--tool codex</code> cover the other CLIs; see the
+          Orrerium README, "Agents board") and sessions on this machine will appear here live.</p>
         </div>`;
       return;
     }
@@ -79,6 +100,7 @@ export function createAgentsPanel({ getIcon } = {}) {
         <div class="agent-title">
           <span class="agent-dot ${dotClass(s)}"></span>
           <span class="agent-project">${escapeHtml(s.project ?? 'unknown')}</span>
+          ${s.source !== 'claude-code' ? `<span class="agent-source">${escapeHtml(s.source)}</span>` : ''}
           <span class="agent-session" title="${escapeHtml(s.sessionId)}">${escapeHtml(s.sessionId.slice(0, 8))}</span>
           <span class="agent-when">${relAgo(s.lastSeen)}</span>
         </div>

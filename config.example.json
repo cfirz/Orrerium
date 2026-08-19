@@ -13,7 +13,9 @@
   },
   "ai": {
     "provider": "auto",
-    "model": "claude-opus-5",
+    "model": null,
+    "baseUrl": null,
+    "keyEnv": null,
     "cliCommand": "claude",
     "timeoutMs": 180000,
     "maxContextTokens": 120000

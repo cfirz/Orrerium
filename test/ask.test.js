@@ -8,26 +8,68 @@ import { fileURLToPath } from 'node:url';
 import { parseVault, parseSkills } from '../lib/vault.js';
 import {
   apiEventText, ask, buildContext, buildSystem, cliEventText,
-  createLineParser, createSseParser, resolveProvider,
+  createLineParser, createSseParser, openAiEventText, resolveKey, resolveProvider,
 } from '../lib/ask.js';
 
 const FIXTURE_VAULT = path.join(path.dirname(fileURLToPath(import.meta.url)), 'fixtures', 'vault');
 
-test('resolveProvider honours explicit setting and auto-detects', () => {
-  assert.equal(resolveProvider({ provider: 'api' }), 'api');
-  assert.equal(resolveProvider({ provider: 'cli' }), 'cli');
-
-  const saved = process.env.ANTHROPIC_API_KEY;
-  try {
-    process.env.ANTHROPIC_API_KEY = 'sk-test';
-    assert.equal(resolveProvider({ provider: 'auto' }), 'api');
-    delete process.env.ANTHROPIC_API_KEY;
-    assert.equal(resolveProvider({ provider: 'auto' }), 'cli');
-  } finally {
-    if (saved === undefined) delete process.env.ANTHROPIC_API_KEY;
-    else process.env.ANTHROPIC_API_KEY = saved;
+// runs fn with the provider key env vars cleared and `vars` applied, then
+// restores everything - keeps tests deterministic on machines with real keys
+const KEY_VARS = ['ANTHROPIC_API_KEY', 'OPENAI_API_KEY', 'GEMINI_API_KEY', 'GOOGLE_API_KEY', 'XAI_API_KEY'];
+function withEnv(vars, fn) {
+  const names = [...new Set([...KEY_VARS, ...Object.keys(vars)])];
+  const saved = Object.fromEntries(names.map((n) => [n, process.env[n]]));
+  for (const n of names) delete process.env[n];
+  for (const [n, v] of Object.entries(vars)) {
+    if (v != null) process.env[n] = v;
   }
-});
+  return Promise.resolve().then(fn).finally(() => {
+    for (const n of names) {
+      if (saved[n] === undefined) delete process.env[n];
+      else process.env[n] = saved[n];
+    }
+  });
+}
+
+test('resolveProvider honours explicit ids, aliases "api", and auto-detects in order', () =>
+  withEnv({}, () => {
+    assert.equal(resolveProvider({ provider: 'cli' }), 'cli');
+    assert.equal(resolveProvider({ provider: 'api' }), 'anthropic'); // pre-0.3 alias
+    for (const id of ['anthropic', 'openai', 'gemini', 'grok', 'ollama']) {
+      assert.equal(resolveProvider({ provider: id }), id);
+    }
+    assert.equal(resolveProvider({ provider: 'auto' }), 'cli'); // no keys anywhere
+    process.env.XAI_API_KEY = 'k';
+    assert.equal(resolveProvider({ provider: 'auto' }), 'grok');
+    process.env.GEMINI_API_KEY = 'k';
+    assert.equal(resolveProvider({ provider: 'auto' }), 'gemini');
+    process.env.OPENAI_API_KEY = 'k';
+    assert.equal(resolveProvider({ provider: 'auto' }), 'openai');
+    process.env.ANTHROPIC_API_KEY = 'k';
+    assert.equal(resolveProvider({ provider: 'auto' }), 'anthropic');
+  }));
+
+test('resolveProvider: GOOGLE_API_KEY alone never triggers auto-detection', () =>
+  withEnv({ GOOGLE_API_KEY: 'g' }, () => {
+    assert.equal(resolveProvider({ provider: 'auto' }), 'cli');
+  }));
+
+test('resolveKey resolves the env key and the per-provider default model', () =>
+  withEnv({ OPENAI_API_KEY: 'sk-oa' }, () => {
+    const r = resolveKey('openai', {});
+    assert.equal(r.key, 'sk-oa');
+    assert.equal(r.model, 'gpt-5.6-terra');
+    assert.equal(resolveKey('openai', { model: 'custom-model' }).model, 'custom-model');
+    assert.throws(() => resolveKey('grok', {}), /XAI_API_KEY/); // names the missing var
+  }));
+
+test('resolveKey: GOOGLE_API_KEY works for explicit gemini, keyEnv overrides, ollama demands a model', () =>
+  withEnv({ GOOGLE_API_KEY: 'g-key', MY_PROXY_KEY: 'p-key' }, () => {
+    assert.equal(resolveKey('gemini', {}).key, 'g-key');
+    assert.equal(resolveKey('grok', { keyEnv: 'MY_PROXY_KEY' }).key, 'p-key');
+    assert.deepEqual(resolveKey('ollama', { model: 'llama3' }), { key: null, model: 'llama3' });
+    assert.throws(() => resolveKey('ollama', {}), /ai\.model/);
+  }));
 
 test('buildContext includes notes and skills, excludes templates', () => {
   const { notes } = parseVault(FIXTURE_VAULT);
@@ -76,6 +118,14 @@ test('event text extractors pick only text deltas', () => {
   assert.equal(cliEventText({ type: 'result', result: 'x' }), null);
 });
 
+test('openAiEventText picks only content deltas', () => {
+  assert.equal(openAiEventText({ choices: [{ delta: { content: 'hi' } }] }), 'hi');
+  assert.equal(openAiEventText({ choices: [{ delta: { role: 'assistant' } }] }), null);
+  assert.equal(openAiEventText({ choices: [{ delta: { content: '' } }] }), null);
+  assert.equal(openAiEventText({ choices: [] }), null);
+  assert.equal(openAiEventText(null), null);
+});
+
 // --- api provider streaming (against a local SSE stand-in) ----------------
 
 async function withSseServer(handler, fn) {
@@ -88,14 +138,7 @@ async function withSseServer(handler, fn) {
   }
 }
 
-function withApiKey(fn) {
-  const saved = process.env.ANTHROPIC_API_KEY;
-  process.env.ANTHROPIC_API_KEY = 'sk-test';
-  return Promise.resolve(fn()).finally(() => {
-    if (saved === undefined) delete process.env.ANTHROPIC_API_KEY;
-    else process.env.ANTHROPIC_API_KEY = saved;
-  });
-}
+const withApiKey = (fn) => withEnv({ ANTHROPIC_API_KEY: 'sk-test' }, fn);
 
 test('askApi streams SSE deltas, split mid-line, into onDelta and the answer', () =>
   withApiKey(() => {
@@ -125,7 +168,7 @@ test('askApi streams SSE deltas, split mid-line, into onDelta and the answer', (
       });
       assert.deepEqual(deltas, ['Hello ', '[[alpha]]']);
       assert.equal(result.answer, 'Hello [[alpha]]');
-      assert.equal(result.provider, 'api');
+      assert.equal(result.provider, 'anthropic'); // "api" resolves to its new name
       assert.equal(result.model, 'claude-test');
       assert.equal(requestBody.stream, true);
       assert.equal(requestBody.system[0].cache_control.type, 'ephemeral'); // caching survives streaming
@@ -178,6 +221,118 @@ test('askApi surfaces a mid-stream error event as a rejection', () =>
       /Overloaded/,
     );
   })));
+
+test('a missing key rejects before any request goes out', () =>
+  withEnv({}, async () => {
+    await assert.rejects(
+      ask('q', { notes: [], skills: [], ai: { provider: 'openai', timeoutMs: 5000 }, onDelta: () => {} }),
+      /OPENAI_API_KEY/,
+    );
+    await assert.rejects( // the fixed pre-0.3 gap: explicit api with no key
+      ask('q', { notes: [], skills: [], ai: { provider: 'api', timeoutMs: 5000 }, onDelta: () => {} }),
+      /ANTHROPIC_API_KEY/,
+    );
+  }));
+
+// --- openai-compatible provider streaming (same local stand-in) -----------
+
+test('askOpenAi streams Chat Completions deltas and sends the compat request shape', () =>
+  withEnv({ OPENAI_API_KEY: 'sk-oa' }, () => {
+    let requestBody;
+    let authHeader;
+    return withSseServer((req, res) => {
+      authHeader = req.headers.authorization;
+      let body = '';
+      req.on('data', (c) => { body += c; });
+      req.on('end', () => {
+        requestBody = JSON.parse(body);
+        res.writeHead(200, { 'content-type': 'text/event-stream' });
+        res.write('data: {"choices":[{"delta":{"role":"assistant"}}]}\n\n');
+        // one delta split across two socket writes exercises the line buffer
+        res.write('data: {"choices":[{"delta":{"content":"Hel');
+        setTimeout(() => {
+          res.write('lo "}}]}\n\n');
+          res.write('data: {"choices":[{"delta":{"content":"[[alpha]]"}}]}\n\n');
+          res.write('data: [DONE]\n\n');
+          res.end();
+        }, 10);
+      });
+    }, async (apiUrl) => {
+      const deltas = [];
+      const result = await ask('q', {
+        notes: [], skills: [],
+        ai: { provider: 'openai', timeoutMs: 5000, apiUrl },
+        onDelta: (t) => deltas.push(t),
+      });
+      assert.deepEqual(deltas, ['Hello ', '[[alpha]]']);
+      assert.equal(result.answer, 'Hello [[alpha]]');
+      assert.equal(result.provider, 'openai');
+      assert.equal(result.model, 'gpt-5.6-terra'); // registry default applied
+      assert.equal(authHeader, 'Bearer sk-oa');
+      assert.equal(requestBody.stream, true);
+      assert.equal(requestBody.model, 'gpt-5.6-terra');
+      assert.equal(requestBody.messages[0].role, 'system'); // vault context leads
+      assert.equal(requestBody.messages.at(-1).content, 'q');
+      assert.ok(!('max_tokens' in requestBody) && !('max_completion_tokens' in requestBody));
+      assert.ok(!('system' in requestBody)); // no Anthropic-style top-level system
+    });
+  }));
+
+test('askOpenAi surfaces mid-stream errors and both HTTP error envelope shapes', () =>
+  withEnv({ OPENAI_API_KEY: 'sk-oa' }, async () => {
+    await withSseServer((req, res) => {
+      res.writeHead(200, { 'content-type': 'text/event-stream' });
+      res.write('data: {"error":{"message":"rate limited"}}\n\n');
+      res.end();
+    }, (apiUrl) => assert.rejects(
+      ask('q', { notes: [], skills: [], ai: { provider: 'openai', timeoutMs: 5000, apiUrl }, onDelta: () => {} }),
+      /rate limited/,
+    ));
+    await withSseServer((req, res) => {
+      res.writeHead(404, { 'content-type': 'application/json' });
+      res.end('{"error":"model not found"}'); // bare-string envelope (Ollama shape)
+    }, (apiUrl) => assert.rejects(
+      ask('q', { notes: [], skills: [], ai: { provider: 'openai', timeoutMs: 5000, apiUrl }, onDelta: () => {} }),
+      /model not found/,
+    ));
+  }));
+
+test('askOpenAi rejects refusals in both buffered and streaming modes', () =>
+  withEnv({ OPENAI_API_KEY: 'sk-oa' }, async () => {
+    await withSseServer((req, res) => {
+      res.writeHead(200, { 'content-type': 'application/json' });
+      res.end('{"choices":[{"message":{"refusal":"no"}}]}');
+    }, (apiUrl) => assert.rejects( // buffered: no onDelta
+      ask('q', { notes: [], skills: [], ai: { provider: 'openai', timeoutMs: 5000, apiUrl } }),
+      /declined/,
+    ));
+    await withSseServer((req, res) => {
+      res.writeHead(200, { 'content-type': 'text/event-stream' });
+      res.write('data: {"choices":[{"delta":{"refusal":"no"}}]}\n\ndata: [DONE]\n\n');
+      res.end();
+    }, (apiUrl) => assert.rejects(
+      ask('q', { notes: [], skills: [], ai: { provider: 'openai', timeoutMs: 5000, apiUrl }, onDelta: () => {} }),
+      /declined/,
+    ));
+  }));
+
+test('ollama needs no key and sends no authorization header', () =>
+  withEnv({}, () => {
+    let authHeader = 'unset';
+    return withSseServer((req, res) => {
+      authHeader = req.headers.authorization;
+      res.writeHead(200, { 'content-type': 'application/json' });
+      res.end('{"choices":[{"message":{"content":"local answer"}}]}');
+    }, async (apiUrl) => {
+      const result = await ask('q', {
+        notes: [], skills: [],
+        ai: { provider: 'ollama', model: 'llama3', timeoutMs: 5000, apiUrl },
+      });
+      assert.equal(result.answer, 'local answer');
+      assert.equal(result.model, 'llama3');
+      assert.equal(authHeader, undefined);
+    });
+  }));
 
 // --- cli provider streaming (against a fake claude shim) ------------------
 
