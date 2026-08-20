@@ -7,6 +7,30 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- Subagent activity on the Brain graph. Sessions with subagents in
+  flight hold a 15-minute lease instead of the 90s stale window, the
+  snapshot carries a `waiting` count ("Waiting on 2 subagents" instead
+  of "idle — turn ended"), and each live node grows a second
+  counter-rotating ring of one dot per agent in flight.
+- Subagents whose type has no node of its own — the built-ins
+  (`general-purpose`, `Explore`, `Plan`, …) have no
+  `.claude/agents/*.md` file, so nothing on the graph to light — are
+  counted on their orchestrator's node instead of vanishing, and their
+  spawn ripples it.
+
+### Fixed
+
+- `SubagentStop` no longer retires a subagent that is still running:
+  it fires at turn end whether a subagent ran or not (9 of 11 in a
+  day's logs followed a `Stop` in sessions that spawned nothing), so
+  stops past the cumulative spawn count now close nothing. Blocking
+  `Agent` calls close exactly on their own `PostToolUse` instead —
+  the call does not return until the subagent finishes — and every
+  backgrounded spawn carries a lease so a lost completion cannot light
+  a node forever.
+
 ## [0.3.0] - 2026-08-19
 
 ### Added

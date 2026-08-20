@@ -358,9 +358,10 @@ body:not([data-panel="brain"]) .motion-toggle { display: none; }
   animation: spark-travel var(--spark-dur, 2400ms) linear infinite;
   transition: opacity 400ms ease;
 }
-/* A session with no working subagent radiates along its own links instead. Dimmer,
-   thinner and slower (duration is scaled in graph-view.js) so attributable agent
-   traffic still reads as the stronger signal. */
+/* A session with no subagent that has a node of its own radiates along its own links
+   instead. Dimmer, thinner and slower (duration is scaled in graph-view.js) so
+   attributable agent traffic still reads as the stronger signal. The subagent orbit
+   below is what says work is in flight when the traffic is only ambient. */
 .spark.ambient { stroke-width: 2.2px; opacity: 0.55; }
 /* dots always travel away from the live node, whichever end of the edge it is on */
 .spark.reverse { animation-direction: reverse; }
@@ -383,6 +384,24 @@ body:not([data-panel="brain"]) .motion-toggle { display: none; }
 }
 .node-spark circle { fill: var(--c-live); }
 @keyframes orbit-spin { to { transform: rotate(360deg); } }
+
+/* One dot per subagent in flight, on a wider ring turning the other way. A session
+   waiting on three agents emits no events of its own, so the level ring alone would
+   read as "warm and quiet" - the countable satellites are the only thing that says
+   how much work is actually out there. Bigger dots and reverse rotation keep the two
+   rings from reading as one crowded orbit; same --c-live channel, because this is
+   still the live read-out and not a node type. */
+.subagent-spark {
+  transform-box: view-box;
+  transform-origin: 0 0;
+  animation: orbit-spin var(--orbit-dur, 14s) linear infinite reverse;
+  pointer-events: none;
+}
+.subagent-spark circle {
+  fill: none;
+  stroke: var(--c-live);
+  stroke-width: 1.1px;
+}
 
 /* one-shot, removed by a setTimeout in graph-view.js */
 .ripple {
@@ -415,6 +434,9 @@ body:not([data-panel="brain"]) .motion-toggle { display: none; }
   :root:not([data-motion="full"]) .spark,
   :root:not([data-motion="full"]) .node-spark,
   :root:not([data-motion="full"]) .ripple { display: none; }
+  /* the subagent ring is a *count*, not decoration: it stops turning but stays
+     visible, or a delegating session loses the only signal it has */
+  :root:not([data-motion="full"]) .subagent-spark { animation: none; }
 }
 
 /* ---------- note panel ---------- */
