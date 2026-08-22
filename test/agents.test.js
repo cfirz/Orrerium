@@ -3,7 +3,7 @@ import assert from 'node:assert/strict';
 import { mkdirSync, mkdtempSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
-import { applyEvent, classifySession, createAgentTracker, sanitizeEvents } from '../lib/agents.js';
+import { applyEvent, classifySession, createAgentTracker, inFlightSubagents, sanitizeEvents } from '../lib/agents.js';
 
 const SID = 'abc12345-0000-0000-0000-000000000000';
 
@@ -220,4 +220,103 @@ test('tracker: replays pre-source log lines as claude-code', () => {
   const s = t.snapshot().sessions[0];
   assert.equal(s.source, 'claude-code');
   assert.equal(s.toolCount, 1);
+});
+
+test('tracker: a session waiting on subagents is not stale at the ordinary window', () => {
+  let clock = 1000;
+  const t = createAgentTracker({ dataDir: null, staleMs: 500, subagentStaleMs: 10_000, now: () => clock });
+  t.record(hookEvt('SessionStart', {}, 1000));
+  t.record(hookEvt('PreToolUse', { tool_name: 'Agent', tool_input: { subagent_type: 'general-purpose', description: 'plan review' } }, 1200));
+  t.record(hookEvt('Stop', {}, 1300)); // the turn ends, the subagent runs on
+
+  // ten times staleMs with no event since - a subagent's own tool calls never
+  // reach this session id, so silence here is not idleness
+  clock = 5000;
+  let s = t.snapshot().sessions[0];
+  assert.equal(s.waiting, 1);
+  assert.equal(s.stale, false);
+  assert.equal(s.activity, 'Waiting on 1 subagent');
+
+  clock = 20_000; // past the subagent lease too: a SubagentStop that never came
+  assert.equal(t.snapshot().sessions[0].stale, true);
+
+  // once it does land, the ordinary window applies again
+  clock = 5000;
+  t.record(hookEvt('SubagentStop', {}, 5000));
+  clock = 5600;
+  s = t.snapshot().sessions[0];
+  assert.equal(s.waiting, 0);
+  assert.equal(s.stale, true);
+});
+
+test('applyEvent: Stop reports the subagents still in flight, not idleness', () => {
+  const sessions = new Map();
+  const feed = (event, extra, ts) => applyEvent(sessions, one(hookEvt(event, extra, ts)));
+
+  feed('PreToolUse', { tool_name: 'Agent', tool_input: { subagent_type: 'Explore', description: 'a' } }, 1000);
+  feed('PreToolUse', { tool_name: 'Agent', tool_input: { subagent_type: 'Explore', description: 'b' } }, 1100);
+  feed('Stop', {}, 1200);
+  assert.equal(sessions.get(SID).activity, 'Waiting on 2 subagents');
+
+  feed('SubagentStop', {}, 1300);
+  feed('Stop', {}, 1400);
+  assert.equal(sessions.get(SID).activity, 'Waiting on 1 subagent');
+
+  feed('SubagentStop', {}, 1500);
+  feed('Stop', {}, 1600);
+  assert.equal(sessions.get(SID).activity, 'idle - turn ended');
+});
+
+test('applyEvent: a SubagentStop past the spawn count closes nothing', () => {
+  // observed Claude Code shape: ~two stops per logged spawn, the surplus pair
+  // arriving at the end of a later turn - by which time a *new* agent is in flight
+  const sessions = new Map();
+  const feed = (event, extra, ts) => applyEvent(sessions, one(hookEvt(event, extra, ts)));
+  const spawn = (type, ts) => feed('PreToolUse', { tool_name: 'Agent', tool_input: { subagent_type: type, description: type } }, ts);
+
+  spawn('Explore', 1000);
+  spawn('Explore', 1100);
+  feed('SubagentStop', {}, 2000); // 1 of 2 spawns - pairs
+  feed('SubagentStop', {}, 3000); // 2 of 2 spawns - pairs
+  const s = sessions.get(SID);
+  assert.deepEqual(s.subagents.map((a) => a.status), ['done', 'done']);
+
+  feed('SubagentStop', {}, 3100); // surplus: 3 stops, 2 spawns
+  feed('SubagentStop', {}, 3200); // surplus
+  assert.deepEqual(s.subagents.map((a) => a.status), ['done', 'done']);
+
+  // the agent spawned after the surplus stops is the one that used to get retired
+  // by them. It now survives - at the cost of its own genuine stop reading as
+  // unattributable too, so the lease is what eventually closes it.
+  spawn('Plan', 4000);
+  feed('SubagentStop', {}, 4100); // 5 stops, 3 spawns - closes nothing
+  assert.equal(s.subagentStops, 5);
+  assert.equal(s.subagents.at(-1).status, 'working');
+  assert.equal(inFlightSubagents(s, 4200), 1);
+  assert.equal(inFlightSubagents(s, 4000 + 900_000 + 1), 0); // lease expired
+});
+
+test('applyEvent: a blocking Agent call closes on its own PostToolUse; a backgrounded one does not', () => {
+  const sessions = new Map();
+  const feed = (event, extra, ts) => applyEvent(sessions, one(hookEvt(event, extra, ts)));
+
+  // backgrounded (the default): Pre and Post land in the same second, handle only
+  feed('PreToolUse', { tool_name: 'Agent', tool_input: { subagent_type: 'qa-agent', description: 'bg', run_in_background: true } }, 1000);
+  feed('PostToolUse', { tool_name: 'Agent', tool_input: { subagent_type: 'qa-agent', run_in_background: true } }, 1000);
+  const s = sessions.get(SID);
+  assert.equal(s.subagents[0].status, 'working');
+  assert.equal(s.subagents[0].background, true);
+
+  // blocking: the call does not return until the subagent is done, so Post is exact
+  feed('PreToolUse', { tool_name: 'Agent', tool_input: { subagent_type: 'reviewer', description: 'fg', run_in_background: false } }, 2000);
+  feed('PostToolUse', { tool_name: 'Agent', tool_input: { subagent_type: 'reviewer', run_in_background: false } }, 60_000);
+  assert.equal(s.subagents[1].status, 'done');
+  assert.equal(s.subagents[1].endedAt, 60_000);
+  assert.equal(s.subagents[0].status, 'working'); // untouched: the Post was not its
+
+  // an absent flag means backgrounded - that is the Agent tool's default
+  feed('PreToolUse', { tool_name: 'Agent', tool_input: { subagent_type: 'planner', description: 'default' } }, 70_000);
+  feed('PostToolUse', { tool_name: 'Agent', tool_input: { subagent_type: 'planner' } }, 70_000);
+  assert.equal(s.subagents[2].status, 'working');
+  assert.equal(s.subagents[2].background, true);
 });

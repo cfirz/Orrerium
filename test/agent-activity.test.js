@@ -4,6 +4,7 @@ import {
   AMBIENT_EDGES_PER_NODE,
   HOT_MS,
   MAX_SPARK_EDGES,
+  SUBAGENT_WARM_MS,
   WARM_MS,
   buildDirIndex,
   deriveActivity,
@@ -259,4 +260,85 @@ test('diffPulses fires on first sight, new subagents and tool bursts - never twi
 test('diffPulses ignores app plumbing sessions', () => {
   const { events } = diffPulses(new Map(), snap(session({ kind: 'startup' }), session({ kind: 'housekeeping' })));
   assert.deepEqual(events, []);
+});
+
+// --- sessions waiting on subagents ---------------------------------------
+// The case the ordinary staleness window gets wrong: a subagent's tool calls are
+// never logged under the parent session id, so an orchestrator with agents in
+// flight has a frozen `lastSeen` and looks quieter than anything else on the graph.
+
+test('a session waiting on subagents stays live past WARM_MS', () => {
+  const waiting = session({ lastSeen: NOW - 10 * 60_000, subagents: [working('qa-agent', NOW - 10 * 60_000)] });
+  const act = deriveActivity(snap(waiting), GRAPH, NOW);
+  assert.equal(act.nodes.get('demo-app'), 1); // warm, not hot - it genuinely has not spoken
+  assert.equal(act.nodes.get('DemoApp.qa-agent'), 1);
+  assert.equal(act.subagents.get('DemoApp.qa-agent'), 1);
+
+  // the same session with no subagent in flight is dark, as before
+  const quiet = session({ lastSeen: NOW - 10 * 60_000 });
+  assert.equal(deriveActivity(snap(quiet), GRAPH, NOW).nodes.size, 0);
+});
+
+test('the subagent lease is a lease: a lost SubagentStop stops claiming work', () => {
+  const abandoned = session({ lastSeen: NOW - SUBAGENT_WARM_MS - 1, subagents: [working('qa-agent')] });
+  assert.equal(deriveActivity(snap(abandoned), GRAPH, NOW).nodes.size, 0);
+});
+
+test('a delegating session ignores the server stale flag, a quiet one obeys it', () => {
+  const flagged = session({ stale: true, lastSeen: NOW - 5 * 60_000, subagents: [working('qa-agent')] });
+  assert.equal(deriveActivity(snap(flagged), GRAPH, NOW).nodes.get('demo-app'), 1);
+
+  const quiet = session({ stale: true, lastSeen: NOW - 5000 });
+  assert.equal(deriveActivity(snap(quiet), GRAPH, NOW).nodes.size, 0);
+});
+
+test('subagent types with no node of their own are counted on the orchestrator', () => {
+  // general-purpose/Plan are built in: no .claude/agents/*.md file, so no node
+  const s = session({ subagents: [working('general-purpose'), working('Plan'), working('qa-agent')] }); // Plan has no node either
+  const act = deriveActivity(snap(s), GRAPH, NOW);
+  assert.equal(act.subagents.get('demo-app'), 2);          // the two unnamed ones
+  assert.equal(act.subagents.get('DemoApp.qa-agent'), 1);  // the one with a node
+  // one attributable agent, so the traffic is the real scan edge - not ambient
+  assert.equal(act.edges.get('demo-app>DemoApp.qa-agent').ambient, false);
+});
+
+test('a session whose subagents are all nodeless still radiates, and counts them', () => {
+  const s = session({ subagents: [working('general-purpose'), working('statusline-setup')] });
+  const act = deriveActivity(snap(s), GRAPH, NOW);
+  assert.equal(act.subagents.get('demo-app'), 2);
+  // nothing attributable, so it radiates along its own links as ambient traffic
+  assert.ok(act.edges.size > 0);
+  assert.ok([...act.edges.values()].every((e) => e.ambient));
+});
+
+test('global agents still resolve, and are not double-counted on the anchor', () => {
+  const s = session({ subagents: [working('Explore')] }); // user.Explore, scope: global
+  const act = deriveActivity(snap(s), GRAPH, NOW);
+  assert.equal(act.subagents.get('user.Explore'), 1);
+  assert.equal(act.subagents.has('demo-app'), false);
+});
+
+test('signature changes when a subagent count changes but nothing else does', () => {
+  const one = session({ subagents: [working('general-purpose', NOW - 5000)] });
+  const two = session({ subagents: [working('general-purpose', NOW - 5000), working('Plan', NOW - 4000)] });
+  const a = deriveActivity(snap(one), GRAPH, NOW);
+  const b = deriveActivity(snap(two), GRAPH, NOW);
+  assert.deepEqual([...a.nodes], [...b.nodes]); // same nodes, same levels
+  assert.notEqual(signature(a), signature(b));
+});
+
+test('a subagent pinned working by a lost stop stops counting once its lease is up', () => {
+  const pinned = working('qa-agent', NOW - SUBAGENT_WARM_MS - 1);
+  // nothing else keeps this session alive, so it goes dark like any quiet one
+  const quiet = session({ lastSeen: NOW - 5 * 60_000, subagents: [pinned] });
+  const act = deriveActivity(snap(quiet), GRAPH, NOW);
+  assert.equal(act.nodes.size, 0);
+  assert.equal(act.subagents.size, 0);
+
+  // and a session that IS live does not light the pinned agent's node either
+  const busy = session({ lastSeen: NOW - 1000, subagents: [pinned] });
+  const act2 = deriveActivity(snap(busy), GRAPH, NOW);
+  assert.equal(act2.nodes.get('demo-app'), 2);
+  assert.equal(act2.nodes.has('DemoApp.qa-agent'), false);
+  assert.equal(act2.subagents.size, 0);
 });

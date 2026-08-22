@@ -126,7 +126,7 @@ export function createGraphView({ svgEl, onSelect, getIcon }) {
   let hitSel = hitLayer.selectAll('line');
   let sparkSel = sparkLayer.selectAll('line.spark');
   let edgeByKey = new Map();
-  let activity = { nodes: new Map(), edges: new Map() }; // from agent-activity.js
+  let activity = { nodes: new Map(), edges: new Map(), subagents: new Map() }; // from agent-activity.js
   let selectedId = null;
   let hoverId = null;
   let hoverEdgeKey = null;
@@ -462,6 +462,10 @@ export function createGraphView({ svgEl, onSelect, getIcon }) {
   const AMBIENT_SLOWDOWN = 1.8;
   const ORBIT_DOTS = { 1: 3, 2: 5 };
   const ORBIT_DUR = { 1: '9s', 2: '5s' };
+  // one dot per subagent in flight. Past a handful the ring stops being countable
+  // and the honest reading is just "several", so cap it rather than crowd it.
+  const MAX_SUBAGENT_DOTS = 8;
+  const SUBAGENT_ORBIT_DUR = '14s';
 
   function edgeLength(d) {
     return Math.hypot(d.target.x - d.source.x, d.target.y - d.source.y);
@@ -505,28 +509,39 @@ export function createGraphView({ svgEl, onSelect, getIcon }) {
 
   // a symmetric ring of dots riding inside the node's own <g>, so it follows the
   // node for free. transform-box/origin are set in CSS - see the note there.
+  // Rebuilt only when the dot count changes: re-appending the circles restarts the
+  // CSS rotation and snaps the whole ring back to its start angle.
+  function orbitRing(g, cls, count, r, dot) {
+    let ring = g.select(`g.${cls}`);
+    if (!count) { ring.remove(); return null; }
+    if (ring.empty() || Number(ring.attr('data-dots')) !== count) {
+      ring.remove();
+      ring = g.insert('g', ':first-child') // behind the blob, so dots pass under it
+        .attr('class', cls)
+        .attr('data-dots', count);
+      for (let i = 0; i < count; i += 1) {
+        const a = (2 * Math.PI * i) / count - Math.PI / 2;
+        ring.append('circle')
+          .attr('cx', (r * Math.cos(a)).toFixed(2))
+          .attr('cy', (r * Math.sin(a)).toFixed(2))
+          .attr('r', dot);
+      }
+    }
+    return ring;
+  }
+
   function renderNodeSparks() {
     nodeSel.each(function (d) {
       const level = activity.nodes.get(d.id) ?? 0;
       const g = d3.select(this);
-      let orbit = g.select('g.node-spark');
-      if (!level) { orbit.remove(); return; }
-      const count = ORBIT_DOTS[level];
-      if (orbit.empty() || Number(orbit.attr('data-dots')) !== count) {
-        orbit.remove();
-        orbit = g.insert('g', ':first-child') // behind the blob, so dots pass under it
-          .attr('class', 'node-spark')
-          .attr('data-dots', count);
-        const r = radius(d) + 6;
-        for (let i = 0; i < count; i += 1) {
-          const a = (2 * Math.PI * i) / count - Math.PI / 2;
-          orbit.append('circle')
-            .attr('cx', (r * Math.cos(a)).toFixed(2))
-            .attr('cy', (r * Math.sin(a)).toFixed(2))
-            .attr('r', 1.4);
-        }
-      }
-      orbit.style('--orbit-dur', ORBIT_DUR[level]);
+      orbitRing(g, 'node-spark', level ? ORBIT_DOTS[level] : 0, radius(d) + 6, 1.4)
+        ?.style('--orbit-dur', ORBIT_DUR[level]);
+      // A second, wider, counter-rotating ring carries one dot per working subagent,
+      // so "how many agents are in flight" reads separately from "how recently did
+      // this session speak" - which the single level ring cannot say at all.
+      const subs = level ? Math.min(MAX_SUBAGENT_DOTS, activity.subagents?.get(d.id) ?? 0) : 0;
+      orbitRing(g, 'subagent-spark', subs, radius(d) + 13, 2.1)
+        ?.style('--orbit-dur', SUBAGENT_ORBIT_DUR);
     });
   }
 
@@ -670,8 +685,9 @@ export function createGraphView({ svgEl, onSelect, getIcon }) {
     getLayout() { return mode; },
     setSelected(id) { selectedId = id; applyState(); },
     setSearchResults(idSet) { searchSet = idSet; applyState(); },
-    // live agent activity - the view stays ignorant of sessions and subagents,
-    // it only receives {nodes: Map<id,level>, edges: Map<key,{level}>}
+    // live agent activity - the view stays ignorant of sessions and who spawned
+    // what, it only receives {nodes: Map<id,level>, edges: Map<key,{level}>,
+    // subagents: Map<id,count>}
     setAgentActivity(act) {
       activity = act;
       renderSparks();

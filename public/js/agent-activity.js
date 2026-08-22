@@ -11,16 +11,23 @@
 export const HOT_MS = 20_000;
 export const WARM_MS = 90_000;
 
+// A session waiting on subagents is the one case where silence is not idleness: a
+// subagent's tool calls never reach the parent session id, so `lastSeen` freezes at
+// the spawn while the work runs on for minutes. Mirrors DEFAULT_SUBAGENT_STALE_MS
+// in lib/agents.js, the same way WARM_MS mirrors DEFAULT_STALE_MS.
+export const SUBAGENT_WARM_MS = 900_000;
+
 // stroke-dashoffset is a paint property, not a composited one: every frame
 // invalidates the whole line's bbox. Element count is cheap, invalidation area
 // is not - so cap how many edges can spark at once.
 export const MAX_SPARK_EDGES = 24;
 
-// A session with no working subagents has no agent edge to carry traffic, which is
-// the common case. It radiates along its own strongest links instead - real work,
-// just not attributable to a named agent, so it renders dimmer and slower and never
-// lights the far end of the edge. Capped per anchor: a project node has ~9 links and
-// the core note ~29, and all of them at once is a firework, not a signal.
+// A session with no subagent that resolves to a node of its own has no agent edge to
+// carry traffic, which is the common case - both when nothing was spawned at all and
+// when what was spawned is a built-in type. It radiates along its own strongest links
+// instead - real work, just not attributable to a named agent, so it renders dimmer
+// and slower and never lights the far end of the edge. Capped per anchor: a project
+// node has ~9 links and the core note ~29, and all at once is a firework, not a signal.
 export const AMBIENT_EDGES_PER_NODE = 4;
 
 // strongest links first, so the radiating edges are the meaningful ones
@@ -126,28 +133,48 @@ function incidentIndex(graphData) {
   return byNode;
 }
 
+// twin of inFlightSubagents() in lib/agents.js: each spawn carries its own lease,
+// because an unmatched SubagentStop leaves a subagent pinned as `working` in the
+// record and we would light its node until the log rolls over.
+export function inFlightSubagents(s, now) {
+  return (s.subagents ?? [])
+    .filter((a) => a.status === 'working' && now - a.startedAt <= SUBAGENT_WARM_MS).length;
+}
+
 function isLive(s, now) {
   if ((s.kind ?? 'work') !== 'work') return false;   // app startup / housekeeping plumbing
-  if (s.status === 'ended' || s.stale) return false;
-  return now - s.lastSeen <= WARM_MS;                 // the snapshot itself may have gone quiet
+  if (s.status === 'ended') return false;
+  const waiting = inFlightSubagents(s, now) > 0;
+  // `stale` is the server's own read of the same clock; a delegating session is
+  // exempt from it here too, so an older server that has not learnt about
+  // subagent leases cannot black out a graph the client knows is busy
+  if (s.stale && !waiting) return false;
+  // the snapshot itself may have gone quiet
+  return now - s.lastSeen <= (waiting ? SUBAGENT_WARM_MS : WARM_MS);
 }
 
 /**
  * @returns {{nodes: Map<string, number>,
- *            edges: Map<string, {level: number, ambient: boolean, reverse: boolean}>}}
+ *            edges: Map<string, {level: number, ambient: boolean, reverse: boolean}>,
+ *            subagents: Map<string, number>}}
  *   level 2 = hot (activity within HOT_MS), 1 = warm. `ambient` marks a session
  *   radiating along its own links because it has no working subagent to point at;
  *   `reverse` flips the dots so they always travel *away* from the live node.
+ *   `subagents` counts the working subagents riding each node - its own type's node
+ *   where one exists, else the orchestrator's anchor - so the view can show how many
+ *   agents are in flight separately from how recently the session spoke.
  */
 export function deriveActivity(snapshot, graphData, now = Date.now()) {
   const nodes = new Map();
   const edges = new Map();
-  if (!snapshot || !graphData) return { nodes, edges };
+  const subagents = new Map();
+  if (!snapshot || !graphData) return { nodes, edges, subagents };
 
   const idx = buildDirIndex(graphData);
   const scanEdges = scanEdgeIndex(graphData);
   const incident = incidentIndex(graphData);
   const bump = (id, level) => { if (id) nodes.set(id, Math.max(nodes.get(id) ?? 0, level)); };
+  const carry = (id, n) => { if (id && n) subagents.set(id, (subagents.get(id) ?? 0) + n); };
   const spark = (e, from, level, ambient) => {
     const key = `${e.source}>${e.target}`; // matches edgeKey() in graph-view.js
     const prev = edges.get(key);
@@ -168,11 +195,17 @@ export function deriveActivity(snapshot, graphData, now = Date.now()) {
     bump(anchor, level);
 
     let attributed = 0;
+    let unnamed = 0;
     for (const a of s.subagents ?? []) {
-      if (a.status !== 'working') continue;
+      if (a.status !== 'working' || now - a.startedAt > SUBAGENT_WARM_MS) continue;
       const agentId = resolveAgentNode(a.type, s.cwd, graphData);
-      if (!agentId) continue;
+      // The built-in types (general-purpose, Explore, Plan, ...) have no
+      // .claude/agents/*.md file behind them and so no node of their own. They are
+      // still real work in flight, so they ride the orchestrator's anchor rather
+      // than vanishing - which is what made a delegating session look empty.
+      if (!agentId) { unnamed += 1; continue; }
       bump(agentId, level);
+      carry(agentId, 1);
       const e = scanEdges.get(agentId);
       if (!e) continue;
       const far = e.source === agentId ? e.target : e.source;
@@ -180,6 +213,7 @@ export function deriveActivity(snapshot, graphData, now = Date.now()) {
       spark(e, far, level, false);
       attributed += 1;
     }
+    carry(anchor, unnamed);
 
     // nothing to attribute the work to - radiate from the session's own node. The far
     // end is deliberately NOT bumped: those neighbours are context, not running work.
@@ -190,14 +224,14 @@ export function deriveActivity(snapshot, graphData, now = Date.now()) {
     }
   }
 
-  if (edges.size <= MAX_SPARK_EDGES) return { nodes, edges };
+  if (edges.size <= MAX_SPARK_EDGES) return { nodes, edges, subagents };
   // real agent traffic keeps its slot before any ambient radiation does
   const kept = [...edges]
     .sort((a, b) => Number(a[1].ambient) - Number(b[1].ambient)
       || b[1].level - a[1].level
       || a[0].localeCompare(b[0]))
     .slice(0, MAX_SPARK_EDGES);
-  return { nodes, edges: new Map(kept) };
+  return { nodes, edges: new Map(kept), subagents };
 }
 
 // A stable string for "the live picture did not change", so the decay sweep can
@@ -207,7 +241,10 @@ export function signature(act) {
   const edges = [...act.edges]
     .map(([k, v]) => `${k}:${v.level}${v.ambient ? 'a' : ''}${v.reverse ? 'r' : ''}`)
     .sort().join(',');
-  return `${nodes}|${edges}`;
+  // the subagent counts are part of the picture: a spawn that lands on a node
+  // already lit changes nothing else, and the guard would swallow the repaint
+  const subs = [...(act.subagents ?? [])].map(([id, n]) => `${id}:${n}`).sort().join(',');
+  return `${nodes}|${edges}|${subs}`;
 }
 
 const subKey = (a) => `${a.type}|${a.startedAt}`;
@@ -277,9 +314,10 @@ export function createAgentActivity({ view, getGraphData, now = Date.now }) {
     const t = now();
     const ids = [];
     for (const ev of events) {
-      const id = ev.agentType
-        ? resolveAgentNode(ev.agentType, ev.cwd, graphData)
-        : resolveAnchor(ev.cwd, idx);
+      // a built-in subagent type has no node to ripple, so its spawn rings the
+      // orchestrator instead - the spawn is the most informative event there is
+      const named = ev.agentType ? resolveAgentNode(ev.agentType, ev.cwd, graphData) : null;
+      const id = named ?? resolveAnchor(ev.cwd, idx);
       if (!id || !act.nodes.has(id)) continue; // never ping a node that isn't live
       if (t - (lastPulseAt.get(id) ?? 0) < PULSE_THROTTLE_MS) continue;
       lastPulseAt.set(id, t);

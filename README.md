@@ -209,7 +209,7 @@ to match.
 - `lib/watch.js` — debounced recursive `fs.watch`; every change triggers a full re-parse (the vault is small; incremental bookkeeping is not worth bugs).
 - `lib/ask.js` — ask-your-brain: whole-vault context + question to an LLM. Zero-dependency providers behind one registry: raw HTTP to the Claude API (with prompt caching and `refusal` handling), one OpenAI-compatible Chat Completions adapter covering OpenAI/Gemini/Grok/Ollama (only base URL, key env var and default model differ), or the local `claude` CLI. All stream — the APIs via SSE, the CLI via `--output-format stream-json` (with a buffered retry for CLIs too old for the flags) — and `/api/ask` relays the deltas as NDJSON when the client asks to stream; a dropped connection cancels the provider call. A missing API key fails before any request, naming the env var. Answers cite notes as `[[wikilinks]]`, which the UI renders as graph navigation.
 - `public/js/graph-view.js` — SVG graph with two layouts: **Rings** (default — concentric orbits with README at the core, then root docs, PROJECTS, LESSONS, MACHINE, IDEAS, TEMPLATES, ROUTINES, and hexagonal APPLICATIONS outermost; notes are angularly sorted toward the projects they link to) and **Force** (Obsidian-style d3-force; position cache keeps live reloads from re-exploding the layout).
-- `public/js/agent-activity.js` — live agent traffic on the graph, in both layouts (see "Live agent activity"). Pure derivation: the agents SSE snapshot reduces to a set of live nodes and live edges, which `graph-view.js` paints.
+- `public/js/agent-activity.js` — live agent traffic on the graph, in both layouts (see "Live agent activity"). Pure derivation: the agents SSE snapshot reduces to live nodes, live edges and a per-node count of subagents in flight, which `graph-view.js` paints.
 - `public/js/note-panel.js` — marked with a wikilink tokenizer; every in-vault link navigates the graph.
 - `public/js/search.js` — substring filter over id/description/tags.
 - `public/vendor/` — committed single-file builds of d3 and marked ([versions and licenses](public/vendor/README.md)).
@@ -324,9 +324,21 @@ without a `source` replay as `claude-code`). Foreign session ids are normalized
 to URL-safe form at ingest. Subagent spawns are detected as `PreToolUse` of
 the `Agent` tool (older Claude Code builds called it `Task`, and log days from
 back then still hold those events, so both names count — `isSubagentTool` in
-`lib/agents.js`). Only `SubagentStop` closes the oldest working subagent:
-`PostToolUse` is not a completion, because a backgrounded agent returns its
-handle within milliseconds and keeps running.
+`lib/agents.js`). Completion is per-kind. A **blocking** `Agent` call closes on
+its own `PostToolUse` — the call does not return until the subagent is done, and
+only one can block at a time, so the match is exact. A **backgrounded** call
+(`run_in_background` absent or true — Pre and Post land in the same second while
+the subagent runs on) has no dependable completion at all: `SubagentStop` fires
+at **turn end whether a subagent ran or not** (measured over a day of one
+machine's logs: 11 stops, 9 of them 3–23s after a `Stop` in sessions that
+spawned nothing), and its payload carries no subagent identity to match on. So
+stops are **counted, not matched**: one past the cumulative spawn count is
+known-unattributable and closes nothing. The cost is the mirror case — a
+turn-end stop inflates the counter and can make a later genuine stop look
+unattributable, leaving that subagent `working` — so every spawn also carries a
+lease (`inFlightSubagents`, 15 minutes), past which it stops counting as in
+flight. Erring long is deliberate for a live read-out; a proper fix needs an id
+on the event.
 
 The Claude desktop app emits hook events of its own, so every session in the
 snapshot carries a `kind` (`classifySession` in `lib/agents.js`): `work` for
@@ -356,9 +368,10 @@ resolves to that repo's agent node — same repo first, then a global agent, the
 nothing, because lighting another repo's `qa-agent` would be a lie. The existing
 `scan` edge between them then carries star dots from the project out to the
 agent, a ring of sparks orbits every live node, and one ripple fires per spawn
-or burst of tool calls. A session with **no** working subagent — the common case —
-has no agent edge to carry traffic, so it radiates along its own strongest links
-instead (frontmatter before body before tag, capped at four per node and picked
+or burst of tool calls. A session with no working subagent that resolves to a node of
+its own — the common case, whether nothing was spawned or what was spawned is a
+built-in type — has no agent edge to carry traffic, so it radiates along its own
+strongest links instead (frontmatter before body before tag, capped at four per node and picked
 deterministically, or the d3 join churns and restarts every animation). Those
 ambient sparks are thinner, dimmer and slower so attributable agent traffic still
 reads as the stronger signal, they travel *away* from the live node whichever end
@@ -366,6 +379,40 @@ of the edge it sits on, and they deliberately do not light the far end: those
 neighbours are context, not running work. Sessions decay hot → warm → dark on the
 client (20s / 90s, the second matching the server's stale threshold), because a
 quiet session produces no new snapshot to react to.
+
+**Sessions with subagents in flight** get their own staleness treatment on both
+sides. A subagent's tool calls normally surface under the parent session id
+(verified: two parallel `Explore` agents logged interleaved, duplicate reads of
+the same file in the same second), so a delegating session is usually the
+opposite of quiet — but a blocking `Agent` call whose subagent sits inside one
+long tool call really does fall silent, and an unreliable `SubagentStop` can
+leave `working` entries behind. So a session with subagents out holds the
+15-minute lease instead of the 90s window (`DEFAULT_SUBAGENT_STALE_MS`
+server-side, `SUBAGENT_WARM_MS` on the client, mirrored the way `WARM_MS`
+mirrors `DEFAULT_STALE_MS`), the snapshot carries a `waiting` count so the board
+reads "Waiting on 2 subagents" rather than "idle — turn ended", and the client
+ignores the server's `stale` flag for exactly those sessions. The lease is what
+keeps a lost completion from lighting a node forever.
+
+Note what the hook stream **cannot** see: agents launched through the Claude
+Agent SDK. An SDK `query()` spawns its own `claude` subprocess with
+`settingSources` empty by default, so `~/.claude/settings.json` — and the hooks
+installed there — never load. Those runs either surface as separate sessions (if
+the app passes hooks itself) or not at all; the documented generic-ingest
+endpoint (`POST /api/hook-event?source=<slug>`) is the way to wire such an
+orchestrator in.
+
+Subagents whose **type has no node** — the built-ins (`general-purpose`,
+`Explore`, `Plan`, …) have no `.claude/agents/*.md` file behind them, so
+`resolveAgentNode` finds nothing — used to vanish entirely, which is most of why
+a delegating session looked empty. They are counted on the orchestrator's anchor
+instead, and their spawn ripples that node rather than nothing. `deriveActivity`
+returns a third map for this, `subagents`: node id → agents in flight there,
+its own type's node where one exists, else the anchor. The view paints it as a
+second, wider, counter-rotating ring of one dot per agent, so *how many agents
+are working* reads separately from *how recently the session spoke* — which the
+single level ring cannot say at all. Counts feed the signature guard too, or a
+spawn landing on an already-lit node would be swallowed as "no change".
 
 All of that motion is **CSS keyframes, not a JS loop** — rAF pauses in hidden
 panes, so a per-frame animation would silently freeze. Travelling dots are a
