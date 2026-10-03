@@ -208,7 +208,7 @@ to match.
 - `lib/graph.js` — pure: notes → `{nodes, edges, warnings}`; undirected dedupe, ghost nodes for unresolved wikilinks, degree; **application** nodes derived from `applicationTags` with tag edges to every note carrying the tag; routine edges from real markdown links and `x.md` mentions in skill bodies.
 - `lib/watch.js` — debounced recursive `fs.watch`; every change triggers a full re-parse (the vault is small; incremental bookkeeping is not worth bugs).
 - `lib/ask.js` — ask-your-brain: whole-vault context + question to an LLM. Zero-dependency providers behind one registry: raw HTTP to the Claude API (with prompt caching and `refusal` handling), one OpenAI-compatible Chat Completions adapter covering OpenAI/Gemini/Grok/Ollama (only base URL, key env var and default model differ), or the local `claude` CLI. All stream — the APIs via SSE, the CLI via `--output-format stream-json` (with a buffered retry for CLIs too old for the flags) — and `/api/ask` relays the deltas as NDJSON when the client asks to stream; a dropped connection cancels the provider call. A missing API key fails before any request, naming the env var. Answers cite notes as `[[wikilinks]]`, which the UI renders as graph navigation.
-- `public/js/graph-view.js` — SVG graph with two layouts: **Rings** (default — concentric orbits with README at the core, then root docs, PROJECTS, LESSONS, MACHINE, IDEAS, TEMPLATES, ROUTINES, and hexagonal APPLICATIONS outermost; notes are angularly sorted toward the projects they link to) and **Force** (Obsidian-style d3-force; position cache keeps live reloads from re-exploding the layout).
+- `public/js/graph-view.js` — SVG graph with two layouts: **Rings** (default — concentric orbits with README at the core, then root docs, PROJECTS, LESSONS, MACHINE, IDEAS, TEMPLATES, ROUTINES, and hexagonal APPLICATIONS outermost; notes are angularly sorted toward the projects they link to) and **Force** (Obsidian-style d3-force; position cache keeps live reloads from re-exploding the layout). Hovering a node lights its links and fades the rest; clicking it pins that highlight until a click elsewhere, with hover still previewing other nodes meanwhile.
 - `public/js/agent-activity.js` — live agent traffic on the graph, in both layouts (see "Live agent activity"). Pure derivation: the agents SSE snapshot reduces to live nodes, live edges and a per-node count of subagents in flight, which `graph-view.js` paints.
 - `public/js/note-panel.js` — marked with a wikilink tokenizer; every in-vault link navigates the graph.
 - `public/js/search.js` — substring filter over id/description/tags.
@@ -368,15 +368,16 @@ resolves to that repo's agent node — same repo first, then a global agent, the
 nothing, because lighting another repo's `qa-agent` would be a lie. The existing
 `scan` edge between them then carries star dots from the project out to the
 agent, a ring of sparks orbits every live node, and one ripple fires per spawn
-or burst of tool calls. A session with no working subagent that resolves to a node of
+or burst of tool calls. Whichever node a dot is travelling to flashes once as
+each dot reaches its rim. A session with no working subagent that resolves to a node of
 its own — the common case, whether nothing was spawned or what was spawned is a
 built-in type — has no agent edge to carry traffic, so it radiates along its own
 strongest links instead (frontmatter before body before tag, capped at four per node and picked
 deterministically, or the d3 join churns and restarts every animation). Those
 ambient sparks are thinner, dimmer and slower so attributable agent traffic still
 reads as the stronger signal, they travel *away* from the live node whichever end
-of the edge it sits on, and they deliberately do not light the far end: those
-neighbours are context, not running work. Sessions decay hot → warm → dark on the
+of the edge it sits on, and they deliberately do not mark the far end live: those
+neighbours are context, not running work (their arrival flash is softer, too). Sessions decay hot → warm → dark on the
 client (20s / 90s, the second matching the server's stale threshold), because a
 quiet session produces no new snapshot to react to.
 
@@ -418,7 +419,12 @@ All of that motion is **CSS keyframes, not a JS loop** — rAF pauses in hidden
 panes, so a per-frame animation would silently freeze. Travelling dots are a
 near-zero dash on a copy of the edge with `pathLength="100"`, so one
 `stroke-dashoffset` keyframe fits every edge length; the orbit rotates about the
-node's local origin via `transform-box: view-box; transform-origin: 0 0`. Under
+node's local origin via `transform-box: view-box; transform-origin: 0 0`. The
+arrival flash is the one exception, because a stylesheet cannot know when a dot
+lands: it is a Web Animation whose `startTime` is pinned to the spark's own CSS
+animation on the document timeline, so both run on the same clock with no
+per-dot events or timers. A `display: none` (switching panels) restarts the
+spark's clock, so each spark's `animationstart` re-pins its flash. Under
 `prefers-reduced-motion: reduce` the decorative traffic can withdraw entirely,
 with live nodes still reading as live through their static styling — but that
 branch is opt-in: motion defaults to **On** and only an explicit Auto on the

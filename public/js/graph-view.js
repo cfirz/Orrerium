@@ -117,6 +117,13 @@ export function createGraphView({ svgEl, onSelect, getIcon }) {
   const nodeLayer = viewport.append('g');
   const tooltipEl = document.getElementById('edge-tooltip');
 
+  // the arrival flash's glow (stop colours in style.css) - a gradient, not a blur
+  // filter: a filter on an animated element re-rasterises its whole region per frame
+  const glow = svg.append('defs').append('radialGradient').attr('id', 'arrival-glow');
+  glow.append('stop').attr('offset', 0).attr('class', 'core');
+  glow.append('stop').attr('offset', 0.4).attr('class', 'rim');
+  glow.append('stop').attr('offset', 1).attr('class', 'rim').attr('stop-opacity', 0);
+
   const posCache = new Map(); // id -> {x,y,vx,vy} - survives every data refresh (force mode)
   let nodes = [];
   let edges = [];
@@ -197,11 +204,11 @@ export function createGraphView({ svgEl, onSelect, getIcon }) {
     sim.force('link').links(edges); // also materialises edge endpoints as node refs
     edgeByKey = new Map(edges.map((e) => [edgeKey(e), e]));
     render();
-    applyState();
     // sparks bind live edge objects, so a refresh must rebind them or they would
     // track the abandoned node objects and freeze where they stood
     renderSparks();
     renderNodeSparks();
+    applyState(); // after the sparks, so entering ones are faded too
 
     if (mode === 'rings') {
       sim.stop();
@@ -456,6 +463,7 @@ export function createGraphView({ svgEl, onSelect, getIcon }) {
   // dash periods that divide 100 so the dashoffset 100->0 loop is seamless. The
   // dash itself is near-zero: under pathLength=100 a dash is a *percentage* of the
   // edge, so stroke-linecap:round + stroke-width must be what defines the dot.
+  // Keyed by dots per loop - see sparkDots().
   const SPARK_DASH = { 1: '0.6 99.4', 2: '0.6 49.4' };
   // a session radiating with nothing to attribute the work to drifts, so real
   // agent traffic still reads as the stronger signal on a crowded graph
@@ -466,10 +474,30 @@ export function createGraphView({ svgEl, onSelect, getIcon }) {
   // and the honest reading is just "several", so cap it rather than crowd it.
   const MAX_SUBAGENT_DOTS = 8;
   const SUBAGENT_ORBIT_DUR = '14s';
+  // the receiving node flashes once per dot: a fixed-length blink whatever the
+  // edge's period, softer for ambient dots the way the dots themselves are
+  const ARRIVAL_MS = 450;
+  const ARRIVAL_PEAK = { agent: 0.85, ambient: 0.45 };
 
   function edgeLength(d) {
     return Math.hypot(d.target.x - d.source.x, d.target.y - d.source.y);
   }
+
+  // hot agent traffic runs two dots per loop, everything else one
+  function sparkDots(a) {
+    return !a.ambient && a.level === 2 ? 2 : 1;
+  }
+
+  // a spark (re)starts on creation, but also when the Brain pane is shown again or
+  // the motion toggle brings it back - display:none cancels a CSS animation, so its
+  // clock resets and every flash pinned to it has to be re-pinned
+  sparkLayer.on('animationstart', (ev) => {
+    if (ev.animationName !== 'spark-travel') return;
+    const key = edgeKey(d3.select(ev.target).datum());
+    nodeLayer.selectAll('circle.arrival')
+      .filter(([k]) => k === key)
+      .each(function ([, w]) { pinArrival(this, w); });
+  });
 
   function renderSparks() {
     const data = [...activity.edges.keys()].map((k) => edgeByKey.get(k)).filter(Boolean);
@@ -492,7 +520,6 @@ export function createGraphView({ svgEl, onSelect, getIcon }) {
       );
     sparkSel.each(function (d) {
       const a = activity.edges.get(edgeKey(d)) ?? {};
-      const level = a.level ?? 1;
       // the slowdown scales the whole window, floor and ceiling included, so ambient
       // dots drift past SPARK_MAX_MS on long edges on purpose rather than by accident
       const scale = a.ambient ? AMBIENT_SLOWDOWN : 1;
@@ -503,8 +530,62 @@ export function createGraphView({ svgEl, onSelect, getIcon }) {
         .classed('ambient', Boolean(a.ambient))
         .classed('reverse', Boolean(a.reverse))
         .style('--spark-dur', `${Math.round(dur)}ms`)
-        .style('--spark-dash', a.ambient ? SPARK_DASH[1] : (SPARK_DASH[level] ?? SPARK_DASH[1]));
+        .style('--spark-dash', SPARK_DASH[sparkDots(a)]);
     });
+    renderArrivals();
+  }
+
+  // One halo per sparked edge, inside the receiving node's <g> so it follows the node
+  // for free. It sits over the blob but under the label - the node itself lights up.
+  function renderArrivals() {
+    const incoming = new Map(); // node id -> [edge key, arrival][]
+    sparkSel.each(function (d) {
+      const a = activity.edges.get(edgeKey(d)) ?? {};
+      const to = a.reverse ? d.source : d.target; // dots travel away from the live end
+      if (!incoming.has(to.id)) incoming.set(to.id, []);
+      incoming.get(to.id).push([edgeKey(d), {
+        line: this, edge: d, to, dots: sparkDots(a), ambient: Boolean(a.ambient),
+      }]);
+    });
+    nodeSel.each(function (n) {
+      d3.select(this).selectAll('circle.arrival')
+        .data(incoming.get(n.id) ?? [], ([key]) => key)
+        .join(
+          (enter) => enter.insert('circle', 'text.label')
+            .attr('class', 'arrival')
+            .attr('fill', 'url(#arrival-glow)'),
+          (update) => update,
+          (exit) => exit.each(function () { this.blink?.cancel(); }).remove(),
+        )
+        .attr('r', radius(n) * 1.7 + 5)
+        .each(function ([, w]) { pinArrival(this, w); });
+    });
+  }
+
+  // Pin a halo's blink to its spark's own CSS animation on the document timeline, so
+  // the flash lands as each dot arrives with no per-dot events or timers - and a
+  // pane hidden by the browser resumes in phase, because both run on the same clock.
+  function pinArrival(halo, w) {
+    halo.blink?.cancel();
+    halo.blink = null;
+    const run = w.line.getAnimations?.().find((x) => x.animationName === 'spark-travel');
+    if (!run) return; // reduced motion or a hidden panel: no spark, nothing arrives
+    const pin = {};
+    halo.pin = pin;
+    run.ready.then(() => {
+      if (halo.pin !== pin || !halo.isConnected) return; // re-pinned or gone meanwhile
+      const dur = run.effect.getComputedTiming().duration;
+      const period = dur / w.dots;
+      // sparks paint under the nodes, so a dot vanishes at the rim, not the centre
+      const lead = dur * Math.min(1, radius(w.to) / Math.max(1, edgeLength(w.edge)));
+      halo.blink = halo.animate([
+        { opacity: w.ambient ? ARRIVAL_PEAK.ambient : ARRIVAL_PEAK.agent, easing: 'ease-out' },
+        { opacity: 0, offset: Math.min(0.9, ARRIVAL_MS / period) },
+        { opacity: 0 },
+      ], { duration: period, iterations: Infinity });
+      // the first flash is the first arrival, not the spawn
+      halo.blink.startTime = run.startTime + period - lead;
+    }, () => {}); // the spark was removed before it ever started
   }
 
   // a symmetric ring of dots riding inside the node's own <g>, so it follows the
@@ -591,26 +672,31 @@ export function createGraphView({ svgEl, onSelect, getIcon }) {
     if (tooltipEl) tooltipEl.classList.add('hidden');
   }
 
-  function edgeFaded(d, focus) {
+  function edgeFaded(d, focus, focusId) {
     if (!focus) return false;
     if (searchSet) return !(focus.has(idOf(d.source)) && focus.has(idOf(d.target)));
-    return idOf(d.source) !== hoverId && idOf(d.target) !== hoverId;
+    return idOf(d.source) !== focusId && idOf(d.target) !== focusId;
   }
 
   // one place decides fading/selection so hover, search and selection never fight
   function applyState() {
-    const focus = searchSet ?? (hoverId ? adjacency.get(hoverId) : null);
+    // a clicked node keeps its fan lit as if still hovered until a click elsewhere;
+    // hovering another node meanwhile previews that one instead
+    const focusId = hoverId ?? selectedId;
+    const focus = searchSet ?? (focusId ? adjacency.get(focusId) : null);
     nodeSel
       .classed('faded', (d) => (focus ? !focus.has(d.id) : false))
       .classed('selected', (d) => d.id === selectedId)
       .classed('live', (d) => activity.nodes.has(d.id));
-    sparkSel.classed('faded', (d) => edgeFaded(d, focus)); // same predicate, harder fade
+    sparkSel.classed('faded', (d) => edgeFaded(d, focus, focusId)); // same predicate, harder fade
+    // a withdrawn dot never arrives, so its flash withdraws with it
+    nodeLayer.selectAll('circle.arrival').classed('faded', ([, w]) => edgeFaded(w.edge, focus, focusId));
     edgeSel
-      .classed('faded', (d) => edgeFaded(d, focus))
+      .classed('faded', (d) => edgeFaded(d, focus, focusId))
       .classed('lit', (d) => {
         if (edgeKey(d) === hoverEdgeKey) return true; // direct edge hover
-        if (searchSet || !hoverId) return false;
-        return idOf(d.source) === hoverId || idOf(d.target) === hoverId; // the fan
+        if (searchSet || !focusId) return false;
+        return idOf(d.source) === focusId || idOf(d.target) === focusId; // the fan
       });
   }
 

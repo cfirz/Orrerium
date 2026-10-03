@@ -7,6 +7,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.4.0] - 2026-10-03
+
 ### Added
 
 - Subagent activity on the Brain graph. Sessions with subagents in
@@ -19,6 +21,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   `.claude/agents/*.md` file, so nothing on the graph to light — are
   counted on their orchestrator's node instead of vanishing, and their
   spawn ripples it.
+- A node flashes once as each live-activity dot reaches it, timed to the
+  moment the dot slips under its rim (softer for ambient traffic).
+- Clicking a graph node keeps its hover highlight pinned until you click
+  somewhere else; hovering another node still previews that one.
 
 ### Fixed
 
@@ -121,7 +127,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Zero-dependency Node server (`node server.js`), with `orrerium.bat` and
   `orrerium.sh` as double-click launchers.
 
-[Unreleased]: https://github.com/cfirz/Orrerium/compare/v0.3.0...HEAD
+[Unreleased]: https://github.com/cfirz/Orrerium/compare/v0.4.0...HEAD
+[0.4.0]: https://github.com/cfirz/Orrerium/compare/v0.3.0...v0.4.0
 [0.3.0]: https://github.com/cfirz/Orrerium/compare/v0.2.0...v0.3.0
 [0.2.0]: https://github.com/cfirz/Orrerium/compare/v0.1.0...v0.2.0
 [0.1.0]: https://github.com/cfirz/Orrerium/releases/tag/v0.1.0
