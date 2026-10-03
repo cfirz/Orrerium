@@ -416,6 +416,15 @@ body:not([data-panel="brain"]) .motion-toggle { display: none; }
   to { r: var(--ripple-to); opacity: 0; }
 }
 
+/* The receiving node flashes once as each travelling dot reaches it. The blink is a
+   Web Animation pinned to the spark's own CSS clock in graph-view.js - a CSS keyframe
+   here could not know when the dot arrives - so this is only the resting state:
+   dark between dots. Fill is the #arrival-glow gradient, set as an attribute. */
+.arrival { opacity: 0; pointer-events: none; }
+.arrival.faded { visibility: hidden; } /* opacity belongs to the animation */
+#arrival-glow .core { stop-color: #fff; stop-opacity: 0.9; }
+#arrival-glow .rim { stop-color: var(--c-live); }
+
 .node.live text.label { fill: var(--text); }
 
 /* Under prefers-reduced-motion the decorative traffic stops: travelling dots and
@@ -433,7 +442,8 @@ body:not([data-panel="brain"]) .motion-toggle { display: none; }
 @media (prefers-reduced-motion: reduce) {
   :root:not([data-motion="full"]) .spark,
   :root:not([data-motion="full"]) .node-spark,
-  :root:not([data-motion="full"]) .ripple { display: none; }
+  :root:not([data-motion="full"]) .ripple,
+  :root:not([data-motion="full"]) .arrival { display: none; }
   /* the subagent ring is a *count*, not decoration: it stops turning but stays
      visible, or a delegating session loses the only signal it has */
   :root:not([data-motion="full"]) .subagent-spark { animation: none; }

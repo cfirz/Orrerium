@@ -19,6 +19,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   `.claude/agents/*.md` file, so nothing on the graph to light — are
   counted on their orchestrator's node instead of vanishing, and their
   spawn ripples it.
+- A node flashes once as each live-activity dot reaches it, timed to the
+  moment the dot slips under its rim (softer for ambient traffic).
+- Clicking a graph node keeps its hover highlight pinned until you click
+  somewhere else; hovering another node still previews that one.
 
 ### Fixed
 
