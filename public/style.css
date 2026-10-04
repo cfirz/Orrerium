@@ -67,10 +67,29 @@ body {
   text-transform: uppercase;
   letter-spacing: 1.5px;
   padding: 0 14px;
+  white-space: nowrap; /* keep the inbox count beside its label */
   cursor: pointer;
 }
 .nav-btn:hover { color: var(--text); }
 .nav-btn.active { color: var(--accent); border-bottom-color: var(--accent); }
+/* waiting-captures count on the Inbox tab; green once it passes the triage threshold,
+   matching the panel's own "ready for triage" */
+.nav-count {
+  display: inline-block;
+  min-width: 16px;
+  margin-left: 2px;
+  padding: 0 5px;
+  border-radius: 8px;
+  background: var(--border);
+  color: var(--text);
+  font-size: 10px;
+  font-weight: 600;
+  line-height: 16px;
+  letter-spacing: 0;
+  text-align: center;
+}
+.nav-count[hidden] { display: none; }
+.nav-count.ready { background: var(--c-idea); color: var(--bg); }
 
 /* topbar graph controls only apply to the brain panel */
 body:not([data-panel="brain"]) .search-wrap { display: none; }

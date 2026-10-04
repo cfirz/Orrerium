@@ -8,7 +8,7 @@ dependencies, all state in files that both humans and AI agents can read.
 Three core panels: **Brain** (interactive graph of the vault with note reader,
 search, ask-your-brain, and live reload), **Projects** (a board built from
 project-page frontmatter), and **Inbox** (the capture buffer with a
-ready-for-triage indicator). Panels deep-link via the URL hash (`#/brain`,
+ready-for-triage indicator, and a waiting-capture count on its topbar tab). Panels deep-link via the URL hash (`#/brain`,
 `#/projects`, `#/inbox`).
 
 If you use [Claude Code](https://claude.com/claude-code), the graph can also map
