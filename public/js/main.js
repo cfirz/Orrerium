@@ -179,7 +179,10 @@ function connectEvents() {
     dot.classList.toggle('down', !connected);
     dot.title = connected ? 'live - watching the vault' : 'disconnected - retrying';
     // a reconnect may have missed events; refetch (initial load already did)
-    if (connected && !firstOpen) loadGraph();
+    if (connected && !firstOpen) {
+      loadGraph();
+      inboxPanel.refresh();
+    }
     if (connected) firstOpen = false;
   });
 }
@@ -229,6 +232,7 @@ for (const b of layoutBtns) b.addEventListener('click', () => setLayout(b.datase
 
 buildLegend();
 loadGraph();
+inboxPanel.refresh(); // fills the topbar count before the panel is ever opened
 connectEvents();
 
 // console/agent-inspectable handle (RUBRIC ethos: the dashboard is debuggable from outside)

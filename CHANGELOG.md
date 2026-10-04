@@ -7,6 +7,23 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- The Inbox tab in the topbar shows how many captures are waiting,
+  live as `inbox.md` changes, and turns green once the buffer passes
+  the triage threshold. Hidden when the inbox is empty.
+
+### Changed
+
+- The inbox counts entries, not lines, toward "ready for triage": it
+  flags at 5 captures, the same threshold the vault's `capture` and
+  `triage` skills use. It flagged at 10 non-blank lines before, so long
+  captures tripped it early. The panel header drops the line count.
+- The graph's layout and motion toggles and the note search moved out
+  of the topbar into a floating panel over the graph's top-left corner,
+  styled like the legend. The topbar is now just the wordmark, the
+  panel tabs, and the live dot.
+
 ### Fixed
 
 - The topbar wordmark now reads Orrerium; it still said BrainOS after the

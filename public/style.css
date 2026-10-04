@@ -67,16 +67,58 @@ body {
   text-transform: uppercase;
   letter-spacing: 1.5px;
   padding: 0 14px;
+  white-space: nowrap; /* keep the inbox count beside its label */
   cursor: pointer;
 }
 .nav-btn:hover { color: var(--text); }
 .nav-btn.active { color: var(--accent); border-bottom-color: var(--accent); }
+/* waiting-captures count on the Inbox tab; green once it passes the triage threshold,
+   matching the panel's own "ready for triage" */
+.nav-count {
+  display: inline-block;
+  min-width: 16px;
+  margin-left: 2px;
+  padding: 0 5px;
+  border-radius: 8px;
+  background: var(--border);
+  color: var(--text);
+  font-size: 10px;
+  font-weight: 600;
+  line-height: 16px;
+  letter-spacing: 0;
+  text-align: center;
+}
+.nav-count[hidden] { display: none; }
+.nav-count.ready { background: var(--c-idea); color: var(--bg); }
 
-/* topbar graph controls only apply to the brain panel */
-body:not([data-panel="brain"]) .search-wrap { display: none; }
-body:not([data-panel="brain"]) .layout-toggle,
-body:not([data-panel="brain"]) .motion-toggle { display: none; }
-.search-wrap { margin-left: auto; display: flex; align-items: center; gap: 8px; }
+.status-dot {
+  margin-left: auto;
+  width: 8px; height: 8px; border-radius: 50%;
+  background: var(--text-dim);
+  flex: none;
+}
+.status-dot.live { background: var(--c-idea); }
+.status-dot.down { background: var(--c-lesson); }
+
+/* ---------- graph controls ---------- */
+/* floats over the graph's top-left corner; living inside #panel-brain means it
+   hides with the graph, no per-panel rules needed */
+.graph-controls {
+  position: absolute;
+  left: 12px;
+  top: 12px;
+  z-index: 5;
+  max-width: calc(100% - 24px);
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px 18px;
+  background: color-mix(in srgb, var(--panel) 85%, transparent);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 6px 10px;
+}
+.search-wrap { display: flex; align-items: center; gap: 8px; }
 #search {
   background: var(--bg);
   border: 1px solid var(--border);
@@ -90,17 +132,10 @@ body:not([data-panel="brain"]) .motion-toggle { display: none; }
 }
 #search:focus { border-color: var(--text-dim); }
 .search-count { color: var(--text-dim); font-size: 12px; min-width: 40px; text-align: right; }
-.status-dot {
-  width: 8px; height: 8px; border-radius: 50%;
-  background: var(--text-dim);
-  flex: none;
-}
-.status-dot.live { background: var(--c-idea); }
-.status-dot.down { background: var(--c-lesson); }
+.search-count:empty { display: none; } /* don't pad the panel when nothing is searched */
 
-/* ---------- layout toggle ---------- */
+/* ---------- layout / motion toggles ---------- */
 .layout-toggle, .motion-toggle { display: flex; align-items: center; gap: 8px; }
-.motion-toggle { margin-left: 14px; }
 /* the toggle only earns its space where the OS is actually suppressing motion */
 .motion-toggle:not([data-relevant]) { display: none; }
 .seg-label { color: var(--text-dim); font-size: 11px; text-transform: uppercase; letter-spacing: 1px; }
