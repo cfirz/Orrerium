@@ -7,6 +7,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Fixed
+
+- The topbar wordmark now reads Orrerium; it still said BrainOS after the
+  rename. The README hero is reshot to match.
+
 ## [0.4.0] - 2026-10-03
 
 ### Added
