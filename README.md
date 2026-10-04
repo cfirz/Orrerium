@@ -96,7 +96,7 @@ That's it. Whenever you're ready:
   [Agents board](#agents-board) hooks are installed (`node hooks/install.js`,
   optionally `--tool gemini` / `--tool codex`) and an agent session runs.
 - **Graph is static (no spark animations)** — your OS has reduced motion
-  switched on *and* the topbar **motion** toggle is set to Auto; switch it back
+  switched on *and* the graph's **motion** toggle is set to Auto; switch it back
   to **On** (the default). On Windows, turning "animation effects" on in
   Settings also brings the motion back.
 
@@ -430,7 +430,7 @@ spark's clock, so each spark's `animationstart` re-pins its flash. Under
 `prefers-reduced-motion: reduce` the decorative traffic can withdraw entirely,
 with live nodes still reading as live through their static styling — but that
 branch is opt-in: motion defaults to **On** and only an explicit Auto on the
-topbar **motion** toggle hands the decision back to the OS. (Windows users:
+graph's **motion** toggle hands the decision back to the OS. (Windows users:
 switching the OS "animation effects" off makes Chrome report `reduce` for every
 page, which is exactly why the sparks — the live-activity read-out itself — do
 not disappear by default.)

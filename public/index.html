@@ -19,25 +19,27 @@
       <button class="nav-btn" data-panel="stats">Stats</button>
       <button class="nav-btn" data-panel="inbox">Inbox <span class="nav-count" id="inbox-count" hidden></span></button>
     </nav>
-    <div class="layout-toggle" id="layout-toggle">
-      <span class="seg-label">layout</span>
-      <button class="seg-btn" data-layout="rings">Rings</button>
-      <button class="seg-btn" data-layout="force">Force</button>
-    </div>
-    <div class="motion-toggle" id="motion-toggle">
-      <span class="seg-label">motion</span>
-      <button class="seg-btn" data-motion="auto" title="Follow the OS reduced-motion preference">Auto</button>
-      <button class="seg-btn" data-motion="full" title="Always animate live agent traffic">On</button>
-    </div>
-    <div class="search-wrap">
-      <input id="search" type="search" placeholder="Search notes…" autocomplete="off" spellcheck="false">
-      <span id="search-count" class="search-count"></span>
-    </div>
     <div id="status-dot" class="status-dot" title="connecting…"></div>
   </header>
   <main class="layout panel-section" id="panel-brain">
     <section id="graph-panel" class="graph-panel">
       <svg id="graph" role="img" aria-label="Knowledge graph of the Brain vault"></svg>
+      <div class="graph-controls">
+        <div class="layout-toggle" id="layout-toggle">
+          <span class="seg-label">layout</span>
+          <button class="seg-btn" data-layout="rings">Rings</button>
+          <button class="seg-btn" data-layout="force">Force</button>
+        </div>
+        <div class="motion-toggle" id="motion-toggle">
+          <span class="seg-label">motion</span>
+          <button class="seg-btn" data-motion="auto" title="Follow the OS reduced-motion preference">Auto</button>
+          <button class="seg-btn" data-motion="full" title="Always animate live agent traffic">On</button>
+        </div>
+        <div class="search-wrap">
+          <input id="search" type="search" placeholder="Search notes…" autocomplete="off" spellcheck="false">
+          <span id="search-count" class="search-count"></span>
+        </div>
+      </div>
       <div id="legend" class="legend"></div>
       <button id="ask-history-btn" class="ask-history-btn" title="Conversation history">🕘</button>
       <div id="ask-history" class="ask-history hidden">
