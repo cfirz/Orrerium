@@ -144,8 +144,14 @@ const server = http.createServer((req, res) => {
 
 function route(req, res) {
   // a fixed base: only the path and query matter, and the Host header is
-  // client input (already pinned by the guard on a loopback listener)
-  const url = new URL(req.url, 'http://localhost');
+  // client input (already pinned by the guard on a loopback listener). Even
+  // so, a request target like "//" is no URL at all - a client error, not a 500
+  let url;
+  try {
+    url = new URL(req.url, 'http://localhost');
+  } catch {
+    return sendJson(res, 400, { error: 'malformed request URL' });
+  }
   const p = url.pathname;
 
   if (req.method === 'POST' && p === '/api/hook-event') return handleHookEvent(req, res, url.searchParams.get('source'));

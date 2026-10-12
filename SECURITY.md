@@ -28,7 +28,8 @@ so expect a first response in about a week rather than within hours.
   `mailto:` and in-page links stay clickable. That covers the `.claude/*.md` files the
   graph scans from other repos, not just the vault.
 - **Nothing leaves your machine.** Orrerium makes no outbound network calls: no LLM
-  provider, no telemetry, no API keys. `config.json` and `data/` are gitignored.
+  provider, no telemetry, no API keys. `config.json` and `data/` are gitignored. (Your
+  browser still loads any remote image a note embeds, as Obsidian would.)
 
 ## Scope
 

@@ -50,6 +50,23 @@ test('a body under the limit is delivered intact', () =>
     assert.deepEqual(seen, ['{"ok":true}']);
   }));
 
+test('a multi-byte character split across two chunks survives', () =>
+  withServer(async (port, seen) => {
+    const bytes = Buffer.from('"שלום"', 'utf8'); // 2 bytes per Hebrew letter
+    const res = await new Promise((resolve, reject) => {
+      const req = http.request({ host: '127.0.0.1', port, method: 'POST', path: '/' }, (r) => {
+        let data = '';
+        r.on('data', (c) => { data += c; });
+        r.on('end', () => resolve({ status: r.statusCode, data }));
+      });
+      req.on('error', reject);
+      req.write(bytes.subarray(0, 2)); // '"' plus the first byte of ש
+      setTimeout(() => req.end(bytes.subarray(2)), 50); // a separate chunk
+    });
+    assert.equal(res.status, 200);
+    assert.deepEqual(seen, ['"שלום"']);
+  }));
+
 test('an oversized body gets a 413 JSON error and the handler gets null', () =>
   withServer(async (port, seen) => {
     const res = await post(port, 'x'.repeat(200));

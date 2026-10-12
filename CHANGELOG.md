@@ -60,7 +60,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   the future is replaced by the arrival time, so it can't name a day
   file in 2100 that sorts into every "recent" window. A vault folder
   vanishing mid-rebuild, or the watcher erroring, keeps the last good
-  graph instead of exiting.
+  graph instead of exiting. A file vanishing mid-download, or a request
+  target that is no URL at all, no longer reaches the crash path either.
+- POST bodies are decoded once, after the last chunk: a multi-byte
+  character (Hebrew, emoji) split across two chunks of a hook payload
+  came out as replacement characters.
 - The topbar wordmark now reads Orrerium; it still said BrainOS after the
   rename. The README hero is reshot to match, and its caption now covers
   the subagent rings and arrival flashes it shows.

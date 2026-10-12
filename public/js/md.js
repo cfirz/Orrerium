@@ -1,12 +1,9 @@
 // Shared markdown renderer: marked configured once with the wikilink
 // tokenizer and the in-app link routing, used by the note panel and inbox.
 import { marked } from '/vendor/marked.esm.js';
+import { escapeHtml, htmlToken, linkTarget } from './md-safe.js';
 
-export function escapeHtml(s) {
-  return s.replace(/[&<>"']/g, (c) => (
-    { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]
-  ));
-}
+export { escapeHtml }; // the panels' long-standing import site
 
 // wikilinks handled at the tokenizer level - no regex-vs-code-fence worries
 marked.use({
@@ -27,28 +24,25 @@ marked.use({
     },
   }],
   renderer: {
-    // Raw HTML renders as text. marked has no sanitizer, and not every note
-    // is the user's own: the graph also shows .claude/*.md files scanned from
-    // other people's repos. Comments still vanish, as they would in Obsidian.
+    // raw HTML renders as text - the rules and the why live in md-safe.js
     html(token) {
-      return /^\s*<!--[\s\S]*-->\s*$/.test(token.text) ? '' : escapeHtml(token.text);
+      return htmlToken(token.text);
     },
     // route relative .md links (the root docs' style) through the same
     // data-slug navigation; external links open in a new tab
     link(token) {
       const text = this.parser.parseInline(token.tokens);
       const href = token.href ?? '';
-      if (/^https?:\/\//i.test(href)) {
-        return `<a href="${escapeHtml(href)}" target="_blank" rel="noopener">${text}</a>`;
+      switch (linkTarget(href)) {
+        case 'external':
+          return `<a href="${escapeHtml(href)}" target="_blank" rel="noopener">${text}</a>`;
+        case 'note':
+          return `<a class="wikilink" data-slug="${escapeHtml(href.split('/').pop().slice(0, -3))}">${text}</a>`;
+        case 'anchor':
+          return `<a href="${escapeHtml(href)}">${text}</a>`;
+        default:
+          return text; // keep the words, drop the link
       }
-      if (href.endsWith('.md')) {
-        const slug = escapeHtml(href.split('/').pop().slice(0, -3));
-        return `<a class="wikilink" data-slug="${slug}">${text}</a>`;
-      }
-      if (/^(mailto:|#)/i.test(href)) return `<a href="${escapeHtml(href)}">${text}</a>`;
-      // anything else is either a script vector (javascript:, data:) or a
-      // relative path this server does not serve - keep the words, drop the link
-      return text;
     },
   },
 });
