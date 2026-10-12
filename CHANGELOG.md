@@ -44,9 +44,26 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- A malformed `Host` header, or a hook event whose `ts` lies past the
+  `Date` range, no longer crashes the server. Any request that throws
+  answers 500 instead. A `ts` that is invalid or more than a minute in
+  the future is replaced by the arrival time, so it can't name a day
+  file in 2100 that sorts into every "recent" window. A vault folder
+  vanishing mid-rebuild, or the watcher erroring, keeps the last good
+  graph instead of exiting.
 - The topbar wordmark now reads Orrerium; it still said BrainOS after the
   rename. The README hero is reshot to match, and its caption now covers
   the subagent rings and arrival flashes it shows.
+
+### Security
+
+- Every request passes a Host/Origin guard before routing: a loopback
+  listener only answers its own host names (no DNS rebinding), and
+  writes refuse any request a browser marks as coming from another site
+  (no cross-site POSTs). The hook relay and `curl` are unaffected.
+- Markdown renders raw HTML as text and drops `javascript:`-style
+  links. Notes include `.claude/*.md` files scanned from other repos,
+  and marked has no sanitizer.
 
 ## [0.4.0] - 2026-10-03
 

@@ -27,19 +27,28 @@ marked.use({
     },
   }],
   renderer: {
+    // Raw HTML renders as text. marked has no sanitizer, and not every note
+    // is the user's own: the graph also shows .claude/*.md files scanned from
+    // other people's repos. Comments still vanish, as they would in Obsidian.
+    html(token) {
+      return /^\s*<!--[\s\S]*-->\s*$/.test(token.text) ? '' : escapeHtml(token.text);
+    },
     // route relative .md links (the root docs' style) through the same
     // data-slug navigation; external links open in a new tab
     link(token) {
       const text = this.parser.parseInline(token.tokens);
       const href = token.href ?? '';
-      if (/^https?:\/\//.test(href)) {
+      if (/^https?:\/\//i.test(href)) {
         return `<a href="${escapeHtml(href)}" target="_blank" rel="noopener">${text}</a>`;
       }
       if (href.endsWith('.md')) {
         const slug = escapeHtml(href.split('/').pop().slice(0, -3));
         return `<a class="wikilink" data-slug="${slug}">${text}</a>`;
       }
-      return `<a href="${escapeHtml(href)}">${text}</a>`;
+      if (/^(mailto:|#)/i.test(href)) return `<a href="${escapeHtml(href)}">${text}</a>`;
+      // anything else is either a script vector (javascript:, data:) or a
+      // relative path this server does not serve - keep the words, drop the link
+      return text;
     },
   },
 });

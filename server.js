@@ -13,6 +13,7 @@ import { summarize, groupSessions, buildFlow } from './lib/flows.js';
 import { buildStats } from './lib/stats.js';
 import { readLines, readJson, writeJson } from './lib/store.js';
 import { readBody } from './lib/http-body.js';
+import { checkRequest } from './lib/request-guard.js';
 
 const config = loadConfig();
 const PUBLIC_DIR = path.join(config.root, 'public');
@@ -59,12 +60,25 @@ function rescanClaude() {
 }
 
 rescanClaude();
-rebuild();
+rebuild(); // a broken vault at startup should fail loudly, so unguarded here
+
+// later rebuilds run from timers, where a throw kills the process: a folder
+// vanishing mid-walk or the vault drive going away keeps the last good graph
+function safeRebuild() {
+  try {
+    rebuild();
+    return true;
+  } catch (err) {
+    console.error(`[vault] rebuild failed, keeping the last graph: ${err.message}`);
+    return false;
+  }
+}
 
 setInterval(() => {
-  if (rescanClaude()) {
-    rebuild();
-    broadcast('vault', { files: [] });
+  try {
+    if (rescanClaude() && safeRebuild()) broadcast('vault', { files: [] });
+  } catch (err) {
+    console.error(`[claude-scan] rescan failed: ${err.message}`);
   }
 }, config.claudeScan.rescanMs).unref();
 
@@ -95,7 +109,8 @@ function recentAgentEvents() {
 watchVault(config.vaultPath, {
   excludeDirs: config.excludeDirs,
   onChange: (files) => {
-    rebuild(); // rebuild BEFORE notifying so the client refetch never races the parser
+    // rebuild BEFORE notifying so the client refetch never races the parser
+    if (!safeRebuild()) return;
     broadcast('vault', { files });
     console.log(`[watch] ${files.join(', ')}`);
   },
@@ -108,7 +123,23 @@ const ICON_NAME_RE = /^[a-z0-9-]{1,32}$/;
 let iconAssignments = readJson(ICON_FILE, {});
 
 const server = http.createServer((req, res) => {
-  const url = new URL(req.url, `http://${req.headers.host ?? 'localhost'}`);
+  const refused = checkRequest(req, config);
+  if (refused) return sendJson(res, refused.status, { error: refused.error });
+  // one bad request answers 500 instead of taking the server down with it -
+  // the sync routes throw into the promise, the async handlers reject into it
+  Promise.resolve()
+    .then(() => route(req, res))
+    .catch((err) => {
+      console.error(`[http] ${req.method} ${req.url}: ${err.stack ?? err.message}`);
+      if (!res.headersSent) sendJson(res, 500, { error: 'internal error' });
+      else res.destroy();
+    });
+});
+
+function route(req, res) {
+  // a fixed base: only the path and query matter, and the Host header is
+  // client input (already pinned by the guard on a loopback listener)
+  const url = new URL(req.url, 'http://localhost');
   const p = url.pathname;
 
   if (req.method === 'POST' && p === '/api/hook-event') return handleHookEvent(req, res, url.searchParams.get('source'));
@@ -149,8 +180,8 @@ const server = http.createServer((req, res) => {
     }
     return serveNote(slug, res);
   }
-  serveStatic(PUBLIC_DIR, p, res);
-});
+  return serveStatic(PUBLIC_DIR, p, res);
+}
 
 function serveNote(slug, res) {
   if (!SLUG_RE.test(slug)) return sendJson(res, 400, { error: 'invalid slug' });

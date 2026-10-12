@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { mkdirSync, mkdtempSync, writeFileSync } from 'node:fs';
+import { mkdirSync, mkdtempSync, readdirSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
 import { applyEvent, classifySession, createAgentTracker, inFlightSubagents, sanitizeEvents } from '../lib/agents.js';
@@ -97,6 +97,29 @@ test('sanitizeEvents: foreign session ids are normalized to slug-safe form', () 
   // a leading non-alphanumeric would fail the URL gate; it gets a prefix
   assert.match(one({ event: 'SessionStart', sessionId: '-x' }, { source: 'my-tool' }).sessionId, /^s-x$/);
   assert.equal(one({ event: 'SessionStart', sessionId: 'y'.repeat(300) }, { source: 'my-tool' }).sessionId.length, 128);
+});
+
+test('sanitizeEvents: a ts that cannot name a sane day file falls back to now', () => {
+  const NOW = Date.UTC(2026, 9, 12, 12, 0, 0);
+  const tsOf = (ts) => one({ ts, event: 'SessionStart', sessionId: 'r' }, { source: 'my-tool', now: () => NOW }).ts;
+  assert.equal(tsOf(9e15), NOW); // past the Date range: toISOString() would throw
+  assert.equal(tsOf(Date.UTC(2100, 0, 1)), NOW); // would pin a 2100-01-01.ndjson as "recent" forever
+  assert.equal(tsOf(-1), NOW);
+  assert.equal(tsOf(Number.NaN), NOW);
+  assert.equal(tsOf('1755500000000'), NOW);
+  assert.equal(tsOf(undefined), NOW);
+  // past stamps are honest (a CI job reporting late); slight clock skew is tolerated
+  assert.equal(tsOf(NOW - 86_400_000), NOW - 86_400_000);
+  assert.equal(tsOf(NOW + 30_000), NOW + 30_000);
+});
+
+test('tracker: an absurd ts is logged under today instead of crashing', () => {
+  const dataDir = mkdtempSync(path.join(tmpdir(), 'orrerium-ts-'));
+  const NOW = Date.UTC(2026, 9, 12, 12, 0, 0);
+  const tracker = createAgentTracker({ dataDir, now: () => NOW });
+  tracker.record({ ts: 9e15, event: 'SessionStart', sessionId: 'r' }, 'my-tool');
+  assert.deepEqual(readdirSync(path.join(dataDir, 'agent-events')), ['2026-10-12.ndjson']);
+  rmSync(dataDir, { recursive: true, force: true });
 });
 
 test('applyEvent: full session lifecycle with parallel subagents', () => {
