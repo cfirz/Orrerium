@@ -12,6 +12,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - The Inbox tab in the topbar shows how many captures are waiting,
   live as `inbox.md` changes, and turns green once the buffer passes
   the triage threshold. Hidden when the inbox is empty.
+- `eventRetentionDays` (default 90, `0` keeps everything): hook-event
+  day logs older than that are deleted at startup and daily. The log was
+  append-only and never pruned.
 
 ### Changed
 
@@ -23,6 +26,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   of the topbar into a floating panel over the graph's top-left corner,
   styled like the legend. The topbar is now just the wordmark, the
   panel tabs, and the live dot.
+- Flows and Stats parse each day's event log once and reuse it until the
+  file changes, instead of re-reading the whole fortnight (about 8 MB on
+  a busy machine) on every request.
+- The live board forgets sessions nobody has heard from in 24 hours.
+  They stay in the day logs for Flows and Stats; before, the in-memory
+  map, and the snapshot broadcast on every hook event, grew for as long
+  as the server ran.
 
 ### Removed
 

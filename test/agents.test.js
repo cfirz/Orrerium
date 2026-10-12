@@ -176,6 +176,22 @@ test('tracker: persists NDJSON, replays after restart, marks stale', () => {
   assert.equal(snap.sessions[0].stale, true);
 });
 
+test('tracker: sessions silent past the eviction window drop out of the snapshot', () => {
+  let clock = 1000;
+  const tracker = createAgentTracker({ evictMs: 10_000, now: () => clock });
+  tracker.record({ ts: 1000, event: 'SessionStart', sessionId: 'old' }, 'my-tool');
+  clock = 8000;
+  tracker.record({ ts: 8000, event: 'SessionStart', sessionId: 'new' }, 'my-tool');
+  assert.deepEqual(tracker.snapshot().sessions.map((s) => s.sessionId), ['new', 'old']);
+  clock = 12_000; // old is 11s quiet, new 4s
+  assert.deepEqual(tracker.snapshot().sessions.map((s) => s.sessionId), ['new']);
+  // a later event under the same id starts it afresh rather than resurrecting state
+  tracker.record({ ts: 12_000, event: 'PreToolUse', sessionId: 'old', tool: 'Read' }, 'my-tool');
+  const old = tracker.snapshot().sessions.find((s) => s.sessionId === 'old');
+  assert.equal(old.toolCount, 1);
+  assert.equal(old.sawStart, false);
+});
+
 test('classifySession separates work from app plumbing', () => {
   const sessions = new Map();
   const feed = (sid, event, extra = {}, ts = 1000) =>

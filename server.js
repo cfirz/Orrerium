@@ -1,6 +1,6 @@
 import http from 'node:http';
 import path from 'node:path';
-import { readFileSync, readdirSync } from 'node:fs';
+import { readFileSync } from 'node:fs';
 import { loadConfig } from './lib/config.js';
 import { serveStatic } from './lib/static.js';
 import { parseVault, parseSkills, parseFrontmatter } from './lib/vault.js';
@@ -10,8 +10,9 @@ import { sseHandler, broadcast } from './lib/sse.js';
 import { scanClaudeAssets, mergeClaudeAssets } from './lib/claude-scan.js';
 import { createAgentTracker } from './lib/agents.js';
 import { summarize, groupSessions, buildFlow } from './lib/flows.js';
-import { buildStats } from './lib/stats.js';
-import { readLines, readJson, writeJson } from './lib/store.js';
+import { buildStats, STATS_DAYS } from './lib/stats.js';
+import { readJson, writeJson } from './lib/store.js';
+import { createEventLog } from './lib/event-log.js';
 import { readBody } from './lib/http-body.js';
 import { checkRequest } from './lib/request-guard.js';
 
@@ -90,19 +91,24 @@ const agentTracker = createAgentTracker({ dataDir: config.dataDir });
   if (replayed) console.log(`[agents] replayed ${replayed} events from today's log`);
 }
 
-// flows read the same NDJSON log the tracker writes, a fortnight back
-const FLOW_DAYS = 14;
+// flows and stats read the same NDJSON log the tracker writes, a fortnight
+// back, memoized per day file; retention prunes it at startup and daily
+const eventLog = createEventLog({
+  dir: path.join(config.dataDir, 'agent-events'),
+  days: STATS_DAYS,
+  retentionDays: config.eventRetentionDays,
+});
 
-function recentAgentEvents() {
-  const dir = path.join(config.dataDir, 'agent-events');
-  let files;
-  try {
-    files = readdirSync(dir).filter((f) => f.endsWith('.ndjson')).sort().slice(-FLOW_DAYS);
-  } catch {
-    return []; // no events logged yet
+function pruneEventLog() {
+  const removed = eventLog.prune();
+  if (removed.length) {
+    console.log(`[agents] pruned ${removed.length} day log(s) older than ${config.eventRetentionDays} days`);
   }
-  return files.flatMap((f) => readLines(path.join(dir, f)));
 }
+pruneEventLog();
+setInterval(pruneEventLog, 86_400_000).unref();
+
+const recentAgentEvents = () => eventLog.recent();
 
 // --- live reload: fs.watch -> eager rebuild -> SSE ------------------------
 
