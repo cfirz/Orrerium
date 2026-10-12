@@ -6,7 +6,6 @@ import { serveStatic } from './lib/static.js';
 import { parseVault, parseSkills, parseFrontmatter } from './lib/vault.js';
 import { buildGraph } from './lib/graph.js';
 import { watchVault } from './lib/watch.js';
-import { ask, resolveProvider } from './lib/ask.js';
 import { sseHandler, broadcast } from './lib/sse.js';
 import { scanClaudeAssets, mergeClaudeAssets } from './lib/claude-scan.js';
 import { createAgentTracker } from './lib/agents.js';
@@ -14,7 +13,6 @@ import { summarize, groupSessions, buildFlow } from './lib/flows.js';
 import { buildStats } from './lib/stats.js';
 import { readLines, readJson, writeJson } from './lib/store.js';
 import { readBody } from './lib/http-body.js';
-import { createAskHistory } from './lib/ask-history.js';
 
 const config = loadConfig();
 const PUBLIC_DIR = path.join(config.root, 'public');
@@ -24,14 +22,12 @@ const SLUG_RE = /^[A-Za-z0-9][A-Za-z0-9._-]*$/;
 
 let graph = null;
 let noteIndex = new Map(); // id -> { path, folder, type }
-let corpus = { notes: [], skills: [] }; // parsed content, reused by /api/ask
 let claudeAssets = { items: [], warnings: [] }; // cross-repo scan, refreshed on its own cadence
 let claudeKey = null;
 
 function rebuild() {
   const parsed = parseVault(config.vaultPath, { excludeDirs: config.excludeDirs, folderTypes: config.folderTypes });
   const { skills, warnings: skillWarnings } = parseSkills(config.vaultPath);
-  corpus = { notes: parsed.notes, skills };
   graph = {
     generatedAt: new Date().toISOString(),
     vaultPath: config.vaultPath.replaceAll('\\', '/'),
@@ -105,10 +101,6 @@ watchVault(config.vaultPath, {
   },
 });
 
-// --- ask conversation history: saved server-side on every answered turn ----
-
-const askHistory = createAskHistory({ dataDir: config.dataDir });
-
 // --- icon assignments: agent id -> icon name (catalog lives client-side) ---
 
 const ICON_FILE = path.join(config.dataDir, 'icon-assignments.json');
@@ -119,13 +111,8 @@ const server = http.createServer((req, res) => {
   const url = new URL(req.url, `http://${req.headers.host ?? 'localhost'}`);
   const p = url.pathname;
 
-  if (req.method === 'POST' && p === '/api/ask') return handleAsk(req, res);
   if (req.method === 'POST' && p === '/api/hook-event') return handleHookEvent(req, res, url.searchParams.get('source'));
   if (req.method === 'POST' && p === '/api/icons/assign') return handleIconAssign(req, res);
-  const askHistDel = /^\/api\/ask\/history\/([A-Za-z0-9._-]+)$/.exec(p);
-  if (req.method === 'DELETE' && askHistDel) {
-    return sendJson(res, 200, { conversations: askHistory.remove(askHistDel[1]) });
-  }
   if (req.method !== 'GET' && req.method !== 'HEAD') {
     res.writeHead(405, { 'Content-Type': 'text/plain; charset=utf-8' });
     res.end('Method not allowed');
@@ -135,20 +122,10 @@ const server = http.createServer((req, res) => {
   if (p === '/api/graph') return sendJson(res, 200, graph);
   if (p === '/api/agents') return sendJson(res, 200, agentTracker.snapshot());
   if (p === '/api/icons') return sendJson(res, 200, { assignments: iconAssignments });
-  if (p === '/api/ask/history') return sendJson(res, 200, { conversations: askHistory.list() });
-  const askHistGet = /^\/api\/ask\/history\/([A-Za-z0-9._-]+)$/.exec(p);
-  if (askHistGet) {
-    const conversation = askHistory.get(askHistGet[1]);
-    if (!conversation) return sendJson(res, 404, { error: `no conversation "${askHistGet[1]}"` });
-    return sendJson(res, 200, { conversation });
-  }
   if (p === '/api/flows') return sendJson(res, 200, { sessions: summarize(recentAgentEvents()) });
   if (p === '/api/stats') {
     // recomputed per request, like /api/flows - see the note in lib/stats.js
-    return sendJson(res, 200, buildStats({
-      events: recentAgentEvents(),
-      conversations: askHistory.list(),
-    }));
+    return sendJson(res, 200, buildStats({ events: recentAgentEvents() }));
   }
   if (p.startsWith('/api/flows/')) {
     let sessionId;
@@ -194,82 +171,8 @@ function serveNote(slug, res) {
   });
 }
 
-async function handleAsk(req, res) {
-  const body = await readBody(req, res, 64 * 1024);
-  if (body === null) return;
-  let payload;
-  try {
-    payload = JSON.parse(body);
-  } catch {
-    return sendJson(res, 400, { error: 'body must be JSON: {"question": "..."}' });
-  }
-  const question = payload?.question;
-  if (typeof question !== 'string' || !question.trim() || question.length > 4000) {
-    return sendJson(res, 400, { error: 'question must be a non-empty string (max 4000 chars)' });
-  }
-  if (payload?.conversationId != null && !(typeof payload.conversationId === 'string' && SLUG_RE.test(payload.conversationId))) {
-    return sendJson(res, 400, { error: 'invalid conversationId' });
-  }
-  // prior turns from the client, sanitized: role/content pairs only, capped
-  const history = (Array.isArray(payload?.history) ? payload.history : [])
-    .filter((h) => (h?.role === 'user' || h?.role === 'assistant') && typeof h?.content === 'string' && h.content.length <= 16000)
-    .slice(-20);
-  const record = (result) => {
-    // a disk hiccup must not turn a good answer into an error
-    try {
-      return askHistory.record({
-        id: payload.conversationId, history, question: question.trim(),
-        answer: result.answer, provider: result.provider, model: result.model,
-      }).id;
-    } catch (err) {
-      console.error(`[ask] history write failed: ${err.message}`);
-      return null;
-    }
-  };
-
-  if (payload?.stream === true) {
-    // NDJSON relay: {type:meta}, {type:delta}* then {type:done} or {type:error}.
-    // The status is committed before the provider runs, so provider failures
-    // ride an error line, not an HTTP code.
-    res.writeHead(200, {
-      'Content-Type': 'application/x-ndjson; charset=utf-8',
-      'Cache-Control': 'no-store',
-    });
-    const abort = new AbortController();
-    res.on('close', () => {
-      if (!res.writableEnded) abort.abort(); // client went away - stop the provider
-    });
-    const line = (obj) => {
-      if (!abort.signal.aborted) res.write(`${JSON.stringify(obj)}\n`);
-    };
-    line({ type: 'meta', provider: resolveProvider(config.ai) });
-    try {
-      const result = await ask(question.trim(), {
-        ...corpus, ai: config.ai, history,
-        onDelta: (text) => line({ type: 'delta', text }),
-        signal: abort.signal,
-      });
-      line({ type: 'done', ...result, conversationId: record(result) });
-    } catch (err) {
-      // an aborted provider call is the client leaving, not an error
-      if (!abort.signal.aborted) console.error(`[ask] ${err.message}`);
-      line({ type: 'error', error: err.message });
-    }
-    res.end();
-    return;
-  }
-
-  try {
-    const result = await ask(question.trim(), { ...corpus, ai: config.ai, history });
-    sendJson(res, 200, { ...result, conversationId: record(result) });
-  } catch (err) {
-    console.error(`[ask] ${err.message}`);
-    sendJson(res, 502, { error: err.message });
-  }
-}
-
-// hook payloads can be big (whole tool inputs/responses ride along) - higher
-// cap than /api/ask, and the tracker whitelists/truncates before persisting.
+// hook payloads can be big (whole tool inputs/responses ride along) - the
+// highest body cap here, and the tracker whitelists/truncates before persisting.
 // ?source= names the wire dialect (claude-code when absent, so every already
 // installed hook keeps working); any other well-formed slug is accepted and
 // read as the normalized generic shape - that is the open ingest contract.

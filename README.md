@@ -6,7 +6,7 @@ Local-first dashboard over a markdown knowledge vault: no build step, zero npm
 dependencies, all state in files that both humans and AI agents can read.
 
 Three core panels: **Brain** (interactive graph of the vault with note reader,
-search, ask-your-brain, and live reload), **Projects** (a board built from
+search, and live reload), **Projects** (a board built from
 project-page frontmatter), and **Inbox** (the capture buffer with a
 ready-for-triage indicator, and a waiting-capture count on its topbar tab). Panels deep-link via the URL hash (`#/brain`,
 `#/projects`, `#/inbox`).
@@ -78,8 +78,6 @@ That's it. Whenever you're ready:
 
 - **Use your own notes** — see
   [Point it at your own vault](#point-it-at-your-own-vault).
-- **AI questions over your notes** (optional) — see
-  [AI features](#ai-features-optional).
 - **Live agent tracking** (optional, Claude Code users) — see
   [Agents board](#agents-board).
 
@@ -148,55 +146,10 @@ notes, and start capturing.
 | `excludeDirs` | `.obsidian`, `.claude`, `.git` | Folders never scanned (skills are scanned explicitly) |
 | `applicationTags` | `unity`, `python`, … | Tags that become APPLICATION nodes on the outer ring |
 | `folderTypes` | `projects` → `project`, … | Folder name → note type for vaults with different conventions; values must be one of the five built-in types, and a provided map **replaces** the default (start from a copy of it) |
-| `ai.provider` | `auto` | `anthropic`, `openai`, `gemini`, `grok`, `ollama`, `cli` (local `claude` CLI / Claude Code login), or `auto` — the first provider whose API key is set, else `cli`. (`api` is the pre-0.3 alias for `anthropic`) |
-| `ai.model` | per provider | Overrides the provider's default model (see [AI features](#ai-features-optional)); **required** for `ollama` (the CLI uses its own configured model) |
-| `ai.baseUrl` | per provider | Overrides the endpoint base — an Ollama port, LM Studio, vLLM, a proxy: any OpenAI-compatible server |
-| `ai.keyEnv` | per provider | *Name* of the env var holding the API key, if not the provider's usual one (the key value itself never goes in config) |
-| `ai.maxContextTokens` | `120000` | Ask context budget: vaults estimated under it ship whole (and prompt-cache); over it a local BM25 + link-graph retrieval step selects the notes that fit |
 | `claudeScan.roots` | `[]` | Dirs whose children are scanned (one level) for `.claude/{skills,agents,commands}` — absolute paths, e.g. `["C:/code"]` or `["/Users/you/code"]` |
 | `claudeScan.globalDir` | `~/.claude` | The global Claude dir, scanned the same way |
 | `claudeScan.settingsPath` | `~/.claude/settings.json` | Read for `skillOverrides` so disabled skills render dormant |
 | `claudeScan.rescanMs` | `300000` | External repos are re-scanned on this cadence (no watchers) |
-
-## AI features (optional)
-
-One feature talks to an LLM; everything else is fully offline.
-
-- **Ask-your-brain** (`#/brain`, ask box) works with any one of these — set the
-  key in the environment (never in a file) and, if you want a specific one,
-  `ai.provider` in `config.json`:
-
-  | Provider | Key env var | Default model |
-  |---|---|---|
-  | `anthropic` | `ANTHROPIC_API_KEY` | `claude-opus-5` |
-  | `openai` | `OPENAI_API_KEY` | `gpt-5.6-terra` |
-  | `gemini` | `GEMINI_API_KEY` (or `GOOGLE_API_KEY`) | `gemini-3.7-flash` |
-  | `grok` | `XAI_API_KEY` | `grok-4.5` |
-  | `ollama` | none — local | none: set `ai.model` |
-  | `cli` | none — the [Claude Code](https://claude.com/claude-code) CLI's own login | the CLI's configured model |
-
-  `auto` (the default) walks `anthropic → openai → gemini → grok` and picks the
-  first key it finds, else falls back to `cli`. `GOOGLE_API_KEY` counts only when
-  `gemini` is chosen explicitly — it exists on too many machines for unrelated
-  reasons to trigger auto-detection. Local models: set
-  `"provider": "ollama", "model": "llama3"` (and `baseUrl` for a non-default
-  port); any other OpenAI-compatible server works via `baseUrl` on any of the
-  openai-dialect providers. Answers stream in as they generate; the stop button
-  cancels mid-answer (the provider call is aborted server-side, and a stopped
-  turn is not kept in the conversation).
-
-**Privacy note:** for vaults that fit the context budget
-(`ai.maxContextTokens`, default 120k tokens ≈ 480 KB of markdown), every
-question ships your *whole vault's* text to **whichever provider is
-configured** (Anthropic, OpenAI, Google, xAI, your local Ollama, or whatever
-the `claude` CLI is logged into). Bigger vaults go through a local retrieval
-step that selects only the notes relevant to the question — but those are
-still vault text going to the provider. Don't point Orrerium at a vault you
-wouldn't send there. **Cost note:** the Anthropic path caches the vault
-context explicitly, so repeat questions are cheap; the other cloud providers
-cache implicitly and partially, so a large vault may re-bill more often. For
-local Ollama models with small context windows, lower `ai.maxContextTokens`
-to match.
 
 ## Architecture (10 lines)
 
@@ -207,14 +160,13 @@ to match.
 - `lib/vault.js` — pure parser: frontmatter (vault dialect) + wikilink/md-link extraction, plus `.claude/skills/*/SKILL.md` as **routine** nodes. Importable by agents and CLIs; no http/fs.watch in it.
 - `lib/graph.js` — pure: notes → `{nodes, edges, warnings}`; undirected dedupe, ghost nodes for unresolved wikilinks, degree; **application** nodes derived from `applicationTags` with tag edges to every note carrying the tag; routine edges from real markdown links and `x.md` mentions in skill bodies.
 - `lib/watch.js` — debounced recursive `fs.watch`; every change triggers a full re-parse (the vault is small; incremental bookkeeping is not worth bugs).
-- `lib/ask.js` — ask-your-brain: whole-vault context + question to an LLM. Zero-dependency providers behind one registry: raw HTTP to the Claude API (with prompt caching and `refusal` handling), one OpenAI-compatible Chat Completions adapter covering OpenAI/Gemini/Grok/Ollama (only base URL, key env var and default model differ), or the local `claude` CLI. All stream — the APIs via SSE, the CLI via `--output-format stream-json` (with a buffered retry for CLIs too old for the flags) — and `/api/ask` relays the deltas as NDJSON when the client asks to stream; a dropped connection cancels the provider call. A missing API key fails before any request, naming the env var. Answers cite notes as `[[wikilinks]]`, which the UI renders as graph navigation.
 - `public/js/graph-view.js` — SVG graph with two layouts: **Rings** (default — concentric orbits with README at the core, then root docs, PROJECTS, LESSONS, MACHINE, IDEAS, TEMPLATES, ROUTINES, and hexagonal APPLICATIONS outermost; notes are angularly sorted toward the projects they link to) and **Force** (Obsidian-style d3-force; position cache keeps live reloads from re-exploding the layout). Hovering a node lights its links and fades the rest; clicking it pins that highlight until a click elsewhere, with hover still previewing other nodes meanwhile.
 - `public/js/agent-activity.js` — live agent traffic on the graph, in both layouts (see "Live agent activity"). Pure derivation: the agents SSE snapshot reduces to live nodes, live edges and a per-node count of subagents in flight, which `graph-view.js` paints.
 - `public/js/note-panel.js` — marked with a wikilink tokenizer; every in-vault link navigates the graph.
 - `public/js/search.js` — substring filter over id/description/tags.
 - `public/vendor/` — committed single-file builds of d3 and marked ([versions and licenses](public/vendor/README.md)).
 - The vault's `.obsidian/graph.json` was the design reference for colours/forces; it is **never read or written at runtime** (Obsidian clobbers it).
-- `public/js/panels.js` + `projects-panel.js` + `inbox-panel.js` — the dashboard shell: a topbar nav switches panels; the projects board renders from graph-node frontmatter (`status`, `dir`, tags, degree) and clicks through to the graph; the inbox view renders `inbox.md` captures and flags the triage threshold. The ask panel is multi-turn — prior Q/A pairs ride along with each request.
+- `public/js/panels.js` + `projects-panel.js` + `inbox-panel.js` — the dashboard shell: a topbar nav switches panels; the projects board renders from graph-node frontmatter (`status`, `dir`, tags, degree) and clicks through to the graph; the inbox view renders `inbox.md` captures and flags the triage threshold.
 - `window.orrerium` in the browser console exposes the view, graph data and simulation for debugging.
 
 ## Agents board
@@ -443,7 +395,7 @@ graph agent nodes — repaints over the `icons` SSE event.
 `#/stats` rolls up everything Orrerium logs into one page: stat tiles for the
 last fortnight (sessions, tool calls, errors, subagent
 spawns, active time), a per-day bar chart of tool calls with errors overlaid,
-the top tools, and ask usage by model. Fully offline —
+and the top tools. Fully offline —
 it reads the same `data/` logs the Agents board writes, so it
 is empty until those features have something to log.
 
@@ -451,12 +403,10 @@ is empty until those features have something to log.
 
 - `GET /api/graph` → `{ generatedAt, vaultPath, nodes, edges, warnings }`
 - `GET /api/note/:slug` → `{ id, path, folder, type, frontmatter, markdown }` (also serves scanned claude assets, e.g. `DemoApp.qa-agent`)
-- `POST /api/ask` `{ question, history? }` → `{ answer, provider, model }` (markdown with `[[wikilink]]` citations; `history` is prior `{role, content}` turns; `model` is the resolved API model or, for the CLI, the model the session reported). Since 0.3, `provider` is the service name (`anthropic`, `openai`, `gemini`, `grok`, `ollama`, `cli`) — scripts that matched the old `"api"` value should match `"anthropic"`.
-- `POST /api/ask` with `"stream": true` → `application/x-ndjson`: one `{"type":"meta","provider"}` line, `{"type":"delta","text"}` lines as the answer generates, closed by `{"type":"done", answer, provider, model, conversationId}` (authoritative full text) or `{"type":"error", error}`. The ask panel uses this; the plain JSON shape above stays for scripts.
 - `GET /api/agents` → `{ generatedAt, sessions: [...] }` — the live board snapshot; each session carries its `source`
 - `POST /api/hook-event[?source=<slug>]` — agent hook payloads (whitelisted, truncated, logged). No `source` means `claude-code`; `gemini-cli` and `codex` select their dialect adapters; any other slug is read as the normalized generic shape (see [Agents board](#agents-board))
 - `GET /api/flows` → `{ sessions: [...] }` — replayable sessions from the last fortnight's log
-- `GET /api/stats` → `{ generatedAt, days, totals, topTools, ask }` — per-day usage rollups over the same fortnight (sessions, tool calls, errors, subagent spawns, active time), and ask usage by provider+model
+- `GET /api/stats` → `{ generatedAt, days, totals, topTools }` — per-day usage rollups over the same fortnight (sessions, tool calls, errors, subagent spawns, active time)
 - `GET /api/flows/:sessionId` → `{ sessionId, flow: { start, end, lanes, spans, ticks, prompts } }`
 - `GET /api/icons` / `POST /api/icons/assign` `{ agent, icon|null }` → `{ assignments }`
 - `GET /events` → SSE, named events; `event: vault` with `data: {"files": [...]}` on every vault change (and after a claude-scan delta); `event: agents` with the board snapshot on every hook event
@@ -487,6 +437,5 @@ see [public/vendor/README.md](public/vendor/README.md).
 
 ## Roadmap
 
-Everything from the original roadmap has shipped: streaming ask answers, a
-retrieval step for oversized vaults, configurable folder→type mapping, and the
-stats panel. New ideas are tracked as GitHub issues.
+Everything from the original roadmap has shipped. New ideas are tracked as
+GitHub issues.

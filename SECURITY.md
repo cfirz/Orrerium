@@ -18,17 +18,8 @@ so expect a first response in about a week rather than within hours.
   `0.0.0.0` publishes an unauthenticated read of your entire vault — plus the endpoints
   below — to anyone who can reach the port. For remote access, use an SSH tunnel or an
   authenticating reverse proxy.
-- **ask-your-brain sends your whole vault.** Every question ships the vault's full text
-  to whichever provider is configured — the Anthropic, OpenAI, Gemini or xAI API, a local
-  Ollama server, or the local `claude` CLI. See the privacy note under
-  [AI features](README.md#ai-features-optional).
-- **The vault is trusted input.** Note contents flow into LLM prompts, so a vault holding
-  text you did not write deserves the same caution as any untrusted input to an agent;
-  prompt injection is possible in principle.
-- **Secrets stay out of the repo.** `config.json` and `data/` are gitignored, and every
-  API key (`ANTHROPIC_API_KEY`, `OPENAI_API_KEY`, `GEMINI_API_KEY`/`GOOGLE_API_KEY`,
-  `XAI_API_KEY`) is read from the environment only — never written to disk. The optional
-  `ai.keyEnv` config names an environment variable; it never holds a key value.
+- **Nothing leaves your machine.** Orrerium makes no outbound network calls: no LLM
+  provider, no telemetry, no API keys. `config.json` and `data/` are gitignored.
 
 ## Scope
 

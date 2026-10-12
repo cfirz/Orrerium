@@ -1,5 +1,5 @@
 // Shared markdown renderer: marked configured once with the wikilink
-// tokenizer and the in-app link routing, used by the note panel and ask panel.
+// tokenizer and the in-app link routing, used by the note panel and inbox.
 import { marked } from '/vendor/marked.esm.js';
 
 export function escapeHtml(s) {

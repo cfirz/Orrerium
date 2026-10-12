@@ -34,6 +34,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   `interactiveSessions`/`cronSessions` split; cron sessions in old logs
   count as ordinary sessions. Leftover `data/crons.json` and
   `data/cron-runs/` are no longer read and can be deleted by hand.
+- Ask-your-brain, and with it every LLM call: the ask box and its
+  conversation history, `/api/ask` and `/api/ask/history*`, the six
+  providers, the retrieval step for oversized vaults, and the `ai`
+  section of `config.json` (a leftover block is ignored, with a startup
+  warning). Orrerium now makes no outbound network calls at all. Stats
+  drops its ask rollup. A leftover `data/ask-conversations.json` can be
+  deleted by hand.
 
 ### Fixed
 

@@ -1,8 +1,6 @@
 import { createGraphView } from './graph-view.js';
 import { createNotePanel } from './note-panel.js';
 import { initSearch } from './search.js';
-import { initAskPanel } from './ask-panel.js';
-import { initAskHistory } from './ask-history.js';
 import { initPanels } from './panels.js';
 import { createProjectsPanel } from './projects-panel.js';
 import { createInboxPanel } from './inbox-panel.js';
@@ -64,11 +62,6 @@ const search = initSearch({
   getGraphData: () => graphData,
   onPick: (id) => selectNode(id, { focus: true }),
 });
-
-const askPanel = initAskPanel({
-  onNavigate: (slug) => selectNode(slug, { focus: true }),
-});
-initAskHistory({ onRestore: (conv) => askPanel.restore(conv) });
 
 // --- dashboard panels -----------------------------------------------------
 

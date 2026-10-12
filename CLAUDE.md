@@ -9,7 +9,7 @@ git: true
 This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.
 
 **Orrerium is a local-first dashboard over a markdown knowledge vault**: an interactive graph, a
-projects board, the inbox view, and ask-your-brain. It ships with a demo vault in
+projects board, the inbox view, and a live agent board. It ships with a demo vault in
 `starter-vault/` and points at it by default; `ORRERIUM_VAULT` or `config.json` selects a real
 vault. `README.md` here is the canonical architecture doc — read it before changing anything;
 this file only adds what an agent needs first.

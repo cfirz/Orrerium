@@ -10,14 +10,11 @@ test('empty raw config gets every default', () => {
   const config = mergeConfig({});
   assert.equal(config.port, 4321);
   assert.deepEqual(config.folderTypes, DEFAULT_FOLDER_TYPES);
-  assert.equal(config.ai.provider, 'auto');
   assert.deepEqual(config.claudeScan.roots, []);
 });
 
 test('nested sections merge one level deep', () => {
-  const config = mergeConfig({ ai: { model: 'claude-sonnet-5' }, claudeScan: { rescanMs: 1000 } });
-  assert.equal(config.ai.model, 'claude-sonnet-5');
-  assert.equal(config.ai.provider, 'auto'); // sibling default survives
+  const config = mergeConfig({ claudeScan: { rescanMs: 1000 } });
   assert.equal(config.claudeScan.rescanMs, 1000);
   assert.ok(config.claudeScan.globalDir); // sibling default survives
 });

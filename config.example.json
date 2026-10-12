@@ -11,15 +11,6 @@
     "ideas": "idea",
     "templates": "template"
   },
-  "ai": {
-    "provider": "auto",
-    "model": null,
-    "baseUrl": null,
-    "keyEnv": null,
-    "cliCommand": "claude",
-    "timeoutMs": 180000,
-    "maxContextTokens": 120000
-  },
   "claudeScan": {
     "roots": [],
     "rescanMs": 300000

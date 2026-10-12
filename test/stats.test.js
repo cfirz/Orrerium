@@ -52,23 +52,6 @@ test('day bucketing, sessions, tools, errors, spawns, activeMs', () => {
   assert.equal(stats.totals.sessions, 2);
 });
 
-test('ask usage groups by provider+model', () => {
-  const stats = buildStats({
-    conversations: [
-      { id: 'a', provider: 'api', model: 'opus', turnCount: 4 },
-      { id: 'b', provider: 'api', model: 'opus', turnCount: 2 },
-      { id: 'c', provider: 'cli', model: 'sonnet', turnCount: 2 },
-    ],
-    now,
-  });
-  assert.equal(stats.ask.conversations, 3);
-  assert.equal(stats.ask.turns, 8);
-  assert.deepEqual(stats.ask.byModel, [
-    { provider: 'api', model: 'opus', conversations: 2, turns: 6 },
-    { provider: 'cli', model: 'sonnet', conversations: 1, turns: 2 },
-  ]);
-});
-
 test('all-empty input returns the zeroed scaffold - the fresh-install contract', () => {
   const stats = buildStats({ days: 5, now });
   assert.equal(stats.days.length, 5);
@@ -77,5 +60,4 @@ test('all-empty input returns the zeroed scaffold - the fresh-install contract',
     sessions: 0, toolCalls: 0, errors: 0, subagentSpawns: 0, activeMs: 0,
   });
   assert.deepEqual(stats.topTools, []);
-  assert.deepEqual(stats.ask, { conversations: 0, turns: 0, byModel: [] });
 });
