@@ -104,6 +104,7 @@ export function createFlowsPanel() {
     if (!flow) return;
     if (scrubT() >= 1) scrubEl.value = 0;
     playBtn.textContent = '⏸';
+    playBtn.setAttribute('aria-label', 'Pause');
     const step = Number(scrubEl.max) / ((PLAY_SECONDS * 1000) / PLAY_TICK_MS);
     playTimer = setInterval(() => {
       scrubEl.value = Math.min(Number(scrubEl.max), Number(scrubEl.value) + step);
@@ -116,6 +117,7 @@ export function createFlowsPanel() {
     clearInterval(playTimer);
     playTimer = null;
     playBtn.textContent = '▶';
+    playBtn.setAttribute('aria-label', 'Replay');
   }
 
   async function refresh() {

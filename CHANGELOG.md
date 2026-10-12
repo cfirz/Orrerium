@@ -34,6 +34,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   of the topbar into a floating panel over the graph's top-left corner,
   styled like the legend. The topbar is now just the wordmark, the
   panel tabs, and the live dot.
+- Tabs reordered around the agents: Brain, Agents, Flows, Stats, then
+  Projects, Inbox, Icons. On a narrow screen the tab strip scrolls
+  sideways instead of clipping. Escape closes the open note. The active
+  tab carries `aria-current`, and the icon-only buttons have labels.
 - Flows and Stats parse each day's event log once and reuse it until the
   file changes, instead of re-reading the whole fortnight (about 8 MB on
   a busy machine) on every request.
@@ -65,6 +69,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- Inbox counting follows the capture skill's entry shape. Every comment
+  is stripped, not just the first. Headings of any level are skipped,
+  not just `# `. A fenced code block counts as part of the entry above
+  it, even when it contains blank lines.
+- `[[slug|alias]]` and `[[slug#heading]]` wikilinks render as links
+  showing their alias, and count as graph edges. Before, they showed as
+  literal text and linked nothing.
 - A malformed `Host` header, or a hook event whose `ts` lies past the
   `Date` range, no longer crashes the server. Any request that throws
   answers 500 instead. A `ts` that is invalid or more than a minute in

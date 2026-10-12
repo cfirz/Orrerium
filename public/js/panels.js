@@ -1,8 +1,8 @@
-// Panel switcher: Brain (graph), Projects (board), Inbox (triage view).
-// The active panel is stamped on <body data-panel> so CSS can scope the
-// topbar controls, mirrored into the URL hash (#/name) so panels deep-link,
-// and persisted across sessions.
-const PANELS = ['brain', 'projects', 'agents', 'flows', 'icons', 'stats', 'inbox'];
+// Panel switcher for the topbar tabs. The active panel is stamped on
+// <body data-panel> (panels read it to skip work while hidden), mirrored into
+// the URL hash (#/name) so panels deep-link, and persisted across sessions.
+// Order follows the nav: the observatory first, then the vault boards.
+const PANELS = ['brain', 'agents', 'flows', 'stats', 'projects', 'inbox', 'icons'];
 
 export function initPanels({ onShow }) {
   const buttons = [...document.querySelectorAll('.nav-btn')];
@@ -10,7 +10,12 @@ export function initPanels({ onShow }) {
   function apply(name) {
     localStorage.setItem('orrerium.panel', name);
     document.body.dataset.panel = name;
-    for (const b of buttons) b.classList.toggle('active', b.dataset.panel === name);
+    for (const b of buttons) {
+      const on = b.dataset.panel === name;
+      b.classList.toggle('active', on);
+      if (on) b.setAttribute('aria-current', 'page');
+      else b.removeAttribute('aria-current');
+    }
     for (const sec of document.querySelectorAll('.panel-section')) {
       sec.classList.toggle('hidden', sec.id !== `panel-${name}`);
     }

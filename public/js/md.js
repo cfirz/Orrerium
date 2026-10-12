@@ -14,13 +14,16 @@ marked.use({
       const i = src.indexOf('[[');
       return i === -1 ? undefined : i;
     },
+    // [[slug]], [[slug|shown text]], [[slug#heading]] - the same forms
+    // lib/vault.js turns into graph edges; the target is the part before # or |
     tokenizer(src) {
-      const m = /^\[\[([^\]|#]+)\]\]/.exec(src);
-      if (m) return { type: 'wikilink', raw: m[0], slug: m[1].trim() };
+      const m = /^\[\[([^\]|#]+)(?:#[^\]|]*)?(?:\|([^\]]*))?\]\]/.exec(src);
+      if (!m) return undefined;
+      const slug = m[1].trim();
+      return { type: 'wikilink', raw: m[0], slug, label: m[2]?.trim() || slug };
     },
     renderer(token) {
-      const slug = escapeHtml(token.slug);
-      return `<a class="wikilink" data-slug="${slug}">${slug}</a>`;
+      return `<a class="wikilink" data-slug="${escapeHtml(token.slug)}">${escapeHtml(token.label)}</a>`;
     },
   }],
   renderer: {

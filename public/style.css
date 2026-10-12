@@ -52,11 +52,21 @@ body {
   border-bottom: 1px solid var(--border);
   flex: none;
 }
-.brand { font-weight: 700; letter-spacing: 2px; }
+.brand { font-weight: 700; letter-spacing: 2px; flex: none; }
 .brand span { color: var(--accent); }
 
 /* ---------- panel nav ---------- */
-.panel-nav { display: flex; gap: 2px; margin-left: 12px; align-self: stretch; }
+/* scrolls sideways on a narrow screen instead of clipping tabs */
+.panel-nav {
+  display: flex;
+  gap: 2px;
+  margin-left: 12px;
+  align-self: stretch;
+  min-width: 0;
+  overflow-x: auto;
+  scrollbar-width: none;
+}
+.panel-nav::-webkit-scrollbar { display: none; }
 .nav-btn {
   background: none;
   border: none;

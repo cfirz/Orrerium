@@ -3,8 +3,7 @@
 // skills use the same number). The entry count also rides on the topbar nav
 // button, so it is kept fresh while hidden.
 import { renderMarkdown } from './md.js';
-
-const TRIAGE_ENTRIES = 5;
+import { TRIAGE_ENTRIES, inboxEntries } from './inbox-count.js';
 
 export function createInboxPanel({ onNavigate }) {
   const head = document.getElementById('inbox-head');
@@ -18,20 +17,16 @@ export function createInboxPanel({ onNavigate }) {
     count.title = `${n} capture${n === 1 ? '' : 's'} waiting${ready ? ' - ready for triage' : ''}`;
   }
 
-  list.addEventListener('click', (ev) => {
+  // wikilinks in the header hint and in the entries navigate the graph
+  const navigate = (ev) => {
     const a = ev.target.closest('a[data-slug]');
     if (a) {
       ev.preventDefault();
       onNavigate(a.dataset.slug);
     }
-  });
-  head.addEventListener('click', (ev) => {
-    const a = ev.target.closest('a[data-slug]');
-    if (a) {
-      ev.preventDefault();
-      onNavigate(a.dataset.slug);
-    }
-  });
+  };
+  list.addEventListener('click', navigate);
+  head.addEventListener('click', navigate);
 
   async function refresh() {
     const res = await fetch('/api/note/inbox');
@@ -42,12 +37,7 @@ export function createInboxPanel({ onNavigate }) {
       return;
     }
     const note = await res.json();
-    // strip the header comment; entries are the remaining paragraph blocks
-    const body = note.markdown.replace(/<!--[\s\S]*?-->/, '');
-    const entries = body
-      .split(/\n\s*\n/)
-      .map((s) => s.trim())
-      .filter((s) => s && !/^#\s/.test(s));
+    const entries = inboxEntries(note.markdown);
     const ready = entries.length >= TRIAGE_ENTRIES;
     setCount(entries.length, ready);
 

@@ -2,25 +2,25 @@
 <html lang="en">
 <head>
   <meta charset="utf-8">
-  <title>Orrerium — Brain</title>
+  <title>Orrerium</title>
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <link rel="stylesheet" href="/style.css">
 </head>
 <body>
   <header class="topbar">
     <div class="brand"><span>O</span>RRERIUM</div>
-    <nav class="panel-nav">
+    <nav class="panel-nav" aria-label="Panels">
       <button class="nav-btn" data-panel="brain">Brain</button>
-      <button class="nav-btn" data-panel="projects">Projects</button>
       <button class="nav-btn" data-panel="agents">Agents</button>
       <button class="nav-btn" data-panel="flows">Flows</button>
-      <button class="nav-btn" data-panel="icons">Icons</button>
       <button class="nav-btn" data-panel="stats">Stats</button>
+      <button class="nav-btn" data-panel="projects">Projects</button>
       <button class="nav-btn" data-panel="inbox">Inbox <span class="nav-count" id="inbox-count" hidden></span></button>
+      <button class="nav-btn" data-panel="icons">Icons</button>
     </nav>
     <a id="demo-badge" class="demo-badge" href="#/agents" hidden
       title="Replaying sample sessions - run node hooks/install.js to watch your own agents">demo</a>
-    <div id="status-dot" class="status-dot" title="connecting…"></div>
+    <div id="status-dot" class="status-dot" role="img" aria-label="connecting" title="connecting…"></div>
   </header>
   <main class="layout panel-section" id="panel-brain">
     <section id="graph-panel" class="graph-panel">
@@ -63,7 +63,7 @@
       <div class="board-head" id="flows-head"></div>
       <div class="flows-controls">
         <select id="flows-select"></select>
-        <button id="flows-play" class="flow-play-btn" title="Replay">▶</button>
+        <button id="flows-play" class="flow-play-btn" title="Replay" aria-label="Replay">▶</button>
         <input id="flows-scrub" type="range" min="0" max="1000" value="1000">
       </div>
       <div class="flows-timeline-wrap"><svg id="flows-svg" role="img" aria-label="Session timeline"></svg></div>

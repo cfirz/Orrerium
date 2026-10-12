@@ -119,6 +119,14 @@ fetch('/api/agents').then((r) => (r.ok ? r.json() : null)).then((snapshot) => {
   agentActivity.onSnapshot(snapshot);
 });
 
+// Escape closes the open note - unless focus is in a field, where Escape
+// already means something (search clears itself)
+document.addEventListener('keydown', (ev) => {
+  if (ev.key !== 'Escape' || !selectedId || document.body.dataset.panel !== 'brain') return;
+  if (ev.target.closest?.('input, textarea, select')) return;
+  selectNode(null);
+});
+
 function selectNode(id, opts = {}) {
   selectedId = id;
   view.setSelected(id);
@@ -171,6 +179,7 @@ function connectEvents() {
     dot.classList.toggle('live', connected);
     dot.classList.toggle('down', !connected);
     dot.title = connected ? 'live - watching the vault' : 'disconnected - retrying';
+    dot.setAttribute('aria-label', dot.title);
     // a reconnect may have missed events; refetch (initial load already did)
     if (connected && !firstOpen) {
       loadGraph();
