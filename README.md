@@ -160,7 +160,7 @@ notes, and start capturing.
 
 ## AI features (optional)
 
-Two features talk to an LLM; everything else is fully offline.
+One feature talks to an LLM; everything else is fully offline.
 
 - **Ask-your-brain** (`#/brain`, ask box) works with any one of these — set the
   key in the environment (never in a file) and, if you want a specific one,
@@ -184,8 +184,6 @@ Two features talk to an LLM; everything else is fully offline.
   openai-dialect providers. Answers stream in as they generate; the stop button
   cancels mid-answer (the provider call is aborted server-side, and a stopped
   turn is not kept in the conversation).
-- **Crons** (`#/crons`) runs headless `claude -p` jobs and always needs the
-  Claude CLI, whatever `ai.provider` says.
 
 **Privacy note:** for vaults that fit the context budget
 (`ai.maxContextTokens`, default 120k tokens ≈ 480 KB of markdown), every
@@ -352,8 +350,7 @@ the hour while the app is open). Those two heuristics apply only to
 `claude-code` sessions — another tool's promptless ended session stays `work`.
 The board's filter chips (All · Live · Idle · Ended · System) keep the two
 system kinds out of every view except System, which shows them labeled for what
-they are. Cron runs are never misclassified: the runner posts a synthetic
-prompt event (tagged `source: cron`).
+they are.
 
 **Flows** (`#/flows`) replays the same log as a timeline: subagent spans stack
 above the orchestrator lane (parallel agents get parallel lanes, packed
@@ -441,29 +438,13 @@ pipeline) to scanned agents. Assignments live in `data/icon-assignments.json`
 (`GET /api/icons`, `POST /api/icons/assign`) and every consumer — board rows,
 graph agent nodes — repaints over the `icons` SSE event.
 
-## Crons
-
-`#/crons` schedules headless `claude -p` runs. The scheduler is **in-process**
-(a deliberate substrate choice over the OS scheduler: every definition
-and run log stays a file an agent can read; nothing to reconcile with OS
-state). Definitions live in `data/crons.json` — never in the vault — with a
-small schedule grammar parsed by `lib/cron-parse.js`: `every 30m`,
-`daily@07:30`, `weekly@mon 09:00` (local wall-clock, DST-safe). Jobs fire only
-while the server runs; a per-job **catchUp** flag runs a missed occurrence
-once at startup ([lib/crons.js](lib/crons.js)). Runs never overlap themselves;
-output is captured to `data/cron-runs/<id>/<ts>.log` with a tail in the run
-record (`data/cron-runs/<id>.ndjson`). Each run also emits synthetic session
-events, so scheduled runs appear on the Agents board and in Flows. The panel
-has the job list (enable/run-now/delete), a week calendar (● past runs
-green/red, ○ upcoming), and per-run output.
-
 ## Stats
 
 `#/stats` rolls up everything Orrerium logs into one page: stat tiles for the
-last fortnight (sessions split interactive/cron, tool calls, errors, subagent
+last fortnight (sessions, tool calls, errors, subagent
 spawns, active time), a per-day bar chart of tool calls with errors overlaid,
-the top tools, per-job cron health, and ask usage by model. Fully offline —
-it reads the same `data/` logs the Agents board and Crons panel write, so it
+the top tools, and ask usage by model. Fully offline —
+it reads the same `data/` logs the Agents board writes, so it
 is empty until those features have something to log.
 
 ## API (what an agent can use)
@@ -473,12 +454,11 @@ is empty until those features have something to log.
 - `POST /api/ask` `{ question, history? }` → `{ answer, provider, model }` (markdown with `[[wikilink]]` citations; `history` is prior `{role, content}` turns; `model` is the resolved API model or, for the CLI, the model the session reported). Since 0.3, `provider` is the service name (`anthropic`, `openai`, `gemini`, `grok`, `ollama`, `cli`) — scripts that matched the old `"api"` value should match `"anthropic"`.
 - `POST /api/ask` with `"stream": true` → `application/x-ndjson`: one `{"type":"meta","provider"}` line, `{"type":"delta","text"}` lines as the answer generates, closed by `{"type":"done", answer, provider, model, conversationId}` (authoritative full text) or `{"type":"error", error}`. The ask panel uses this; the plain JSON shape above stays for scripts.
 - `GET /api/agents` → `{ generatedAt, sessions: [...] }` — the live board snapshot; each session carries its `source`
-- `POST /api/hook-event[?source=<slug>]` — agent hook payloads (whitelisted, truncated, logged). No `source` means `claude-code`; `gemini-cli`, `codex` and `cron` select their dialect adapters; any other slug is read as the normalized generic shape (see [Agents board](#agents-board))
+- `POST /api/hook-event[?source=<slug>]` — agent hook payloads (whitelisted, truncated, logged). No `source` means `claude-code`; `gemini-cli` and `codex` select their dialect adapters; any other slug is read as the normalized generic shape (see [Agents board](#agents-board))
 - `GET /api/flows` → `{ sessions: [...] }` — replayable sessions from the last fortnight's log
-- `GET /api/stats` → `{ generatedAt, days, totals, topTools, crons, ask }` — per-day usage rollups over the same fortnight (sessions split interactive/cron, tool calls, errors, subagent spawns, active time), cron run health per job, and ask usage by provider+model
+- `GET /api/stats` → `{ generatedAt, days, totals, topTools, ask }` — per-day usage rollups over the same fortnight (sessions, tool calls, errors, subagent spawns, active time), and ask usage by provider+model
 - `GET /api/flows/:sessionId` → `{ sessionId, flow: { start, end, lanes, spans, ticks, prompts } }`
 - `GET /api/icons` / `POST /api/icons/assign` `{ agent, icon|null }` → `{ assignments }`
-- `GET /api/crons` → `{ jobs }` · `POST /api/crons` (upsert def) · `POST /api/crons/:id/run` · `GET /api/crons/:id/runs` · `DELETE /api/crons/:id`
 - `GET /events` → SSE, named events; `event: vault` with `data: {"files": [...]}` on every vault change (and after a claude-scan delta); `event: agents` with the board snapshot on every hook event
 
 ## Test

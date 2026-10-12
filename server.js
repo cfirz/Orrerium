@@ -14,7 +14,6 @@ import { summarize, groupSessions, buildFlow } from './lib/flows.js';
 import { buildStats } from './lib/stats.js';
 import { readLines, readJson, writeJson } from './lib/store.js';
 import { readBody } from './lib/http-body.js';
-import { createCronRunner } from './lib/crons.js';
 import { createAskHistory } from './lib/ask-history.js';
 
 const config = loadConfig();
@@ -106,31 +105,6 @@ watchVault(config.vaultPath, {
   },
 });
 
-// --- http -----------------------------------------------------------------
-
-// --- crons: in-process scheduler running `claude -p` headless ---------------
-
-// cron runs impersonate sessions on the agents board/flows via synthetic events
-const cronSession = (job, startTs) => `cron-${job.id}-${startTs}`;
-
-const cronRunner = createCronRunner({
-  dataDir: config.dataDir,
-  ai: config.ai,
-  onChange: () => broadcast('crons', { jobs: cronRunner.list() }),
-  onRunStart: (job, ts) => {
-    agentTracker.record({ ts, event: 'SessionStart', sessionId: cronSession(job, ts), cwd: job.cwd ?? config.root }, 'cron');
-    agentTracker.record({ ts, event: 'UserPromptSubmit', sessionId: cronSession(job, ts), cwd: job.cwd ?? config.root, prompt: `[cron ${job.name}] ${job.prompt}` }, 'cron');
-    broadcast('agents', agentTracker.snapshot());
-    console.log(`[crons] ${job.id} started`);
-  },
-  onRunEnd: (job, record) => {
-    agentTracker.record({ ts: record.endedAt, event: 'SessionEnd', sessionId: cronSession(job, record.startedAt), cwd: job.cwd ?? config.root }, 'cron');
-    broadcast('agents', agentTracker.snapshot());
-    console.log(`[crons] ${job.id} ${record.status} in ${Math.round(record.ms / 1000)}s`);
-  },
-});
-cronRunner.start();
-
 // --- ask conversation history: saved server-side on every answered turn ----
 
 const askHistory = createAskHistory({ dataDir: config.dataDir });
@@ -148,14 +122,6 @@ const server = http.createServer((req, res) => {
   if (req.method === 'POST' && p === '/api/ask') return handleAsk(req, res);
   if (req.method === 'POST' && p === '/api/hook-event') return handleHookEvent(req, res, url.searchParams.get('source'));
   if (req.method === 'POST' && p === '/api/icons/assign') return handleIconAssign(req, res);
-  if (req.method === 'POST' && p === '/api/crons') return handleCronUpsert(req, res);
-  const cronRun = /^\/api\/crons\/([A-Za-z0-9._-]+)\/run$/.exec(p);
-  if (req.method === 'POST' && cronRun) return handleCronRun(cronRun[1], res);
-  const cronDel = /^\/api\/crons\/([A-Za-z0-9._-]+)$/.exec(p);
-  if (req.method === 'DELETE' && cronDel) {
-    cronRunner.remove(cronDel[1]);
-    return sendJson(res, 200, { jobs: cronRunner.list() });
-  }
   const askHistDel = /^\/api\/ask\/history\/([A-Za-z0-9._-]+)$/.exec(p);
   if (req.method === 'DELETE' && askHistDel) {
     return sendJson(res, 200, { conversations: askHistory.remove(askHistDel[1]) });
@@ -169,7 +135,6 @@ const server = http.createServer((req, res) => {
   if (p === '/api/graph') return sendJson(res, 200, graph);
   if (p === '/api/agents') return sendJson(res, 200, agentTracker.snapshot());
   if (p === '/api/icons') return sendJson(res, 200, { assignments: iconAssignments });
-  if (p === '/api/crons') return sendJson(res, 200, { jobs: cronRunner.list() });
   if (p === '/api/ask/history') return sendJson(res, 200, { conversations: askHistory.list() });
   const askHistGet = /^\/api\/ask\/history\/([A-Za-z0-9._-]+)$/.exec(p);
   if (askHistGet) {
@@ -177,16 +142,11 @@ const server = http.createServer((req, res) => {
     if (!conversation) return sendJson(res, 404, { error: `no conversation "${askHistGet[1]}"` });
     return sendJson(res, 200, { conversation });
   }
-  const cronRuns = /^\/api\/crons\/([A-Za-z0-9._-]+)\/runs$/.exec(p);
-  if (cronRuns) return sendJson(res, 200, { runs: cronRunner.runsFor(cronRuns[1]) });
   if (p === '/api/flows') return sendJson(res, 200, { sessions: summarize(recentAgentEvents()) });
   if (p === '/api/stats') {
     // recomputed per request, like /api/flows - see the note in lib/stats.js
-    const jobs = cronRunner.list();
     return sendJson(res, 200, buildStats({
       events: recentAgentEvents(),
-      cronJobs: jobs,
-      cronRunsByJob: Object.fromEntries(jobs.map((j) => [j.id, cronRunner.runsFor(j.id)])),
       conversations: askHistory.list(),
     }));
   }
@@ -332,32 +292,6 @@ async function handleHookEvent(req, res, source) {
   broadcast('agents', agentTracker.snapshot());
   res.writeHead(204);
   res.end();
-}
-
-async function handleCronUpsert(req, res) {
-  const body = await readBody(req, res, 64 * 1024);
-  if (body === null) return;
-  let def;
-  try {
-    def = JSON.parse(body);
-  } catch {
-    return sendJson(res, 400, { error: 'body must be a JSON cron definition' });
-  }
-  try {
-    const job = cronRunner.upsert(def);
-    sendJson(res, 200, { job });
-  } catch (err) {
-    sendJson(res, 400, { error: err.message });
-  }
-}
-
-async function handleCronRun(id, res) {
-  try {
-    const record = await cronRunner.runNow(id);
-    sendJson(res, 200, record ? { record } : { alreadyRunning: true });
-  } catch (err) {
-    sendJson(res, 404, { error: err.message });
-  }
 }
 
 async function handleIconAssign(req, res) {

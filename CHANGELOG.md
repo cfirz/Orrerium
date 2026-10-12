@@ -24,6 +24,17 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   styled like the legend. The topbar is now just the wordmark, the
   panel tabs, and the live dot.
 
+### Removed
+
+- Crons (`#/crons`): the in-process scheduler for headless `claude -p`
+  runs, its `/api/crons*` endpoints, and the cron column on Stats. It was
+  the one endpoint that started a process, and its only real job — a
+  daily inbox count — is what the Inbox tab badge now shows live. Stats
+  reports one `sessions` count per day instead of the
+  `interactiveSessions`/`cronSessions` split; cron sessions in old logs
+  count as ordinary sessions. Leftover `data/crons.json` and
+  `data/cron-runs/` are no longer read and can be deleted by hand.
+
 ### Fixed
 
 - The topbar wordmark now reads Orrerium; it still said BrainOS after the

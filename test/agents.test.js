@@ -171,11 +171,11 @@ test('classifySession separates work from app plumbing', () => {
   feed('fresh-sid', 'SessionStart', {}, 3000);
   assert.equal(classifySession(sessions.get('fresh-sid')), 'work');
 
-  // cron runs carry a synthetic prompt, so ending tool-less stays work
-  feed('cron-sid', 'SessionStart', {}, 4000);
-  feed('cron-sid', 'UserPromptSubmit', { prompt: '[cron X] do it' }, 4000);
-  feed('cron-sid', 'SessionEnd', {}, 5000);
-  assert.equal(classifySession(sessions.get('cron-sid')), 'work');
+  // a prompt answered without a tool call is still work, not plumbing
+  feed('chat-sid', 'SessionStart', {}, 4000);
+  feed('chat-sid', 'UserPromptSubmit', { prompt: 'what changed?' }, 4000);
+  feed('chat-sid', 'SessionEnd', {}, 5000);
+  assert.equal(classifySession(sessions.get('chat-sid')), 'work');
 
   // snapshot carries the kind
   const dataDir = mkdtempSync(path.join(tmpdir(), 'orrerium-agents-'));

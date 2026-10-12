@@ -9,7 +9,6 @@ import { createInboxPanel } from './inbox-panel.js';
 import { createAgentsPanel } from './agents-panel.js';
 import { createFlowsPanel } from './flows-panel.js';
 import { createIconsPanel } from './icons-panel.js';
-import { createCronsPanel } from './crons-panel.js';
 import { createStatsPanel } from './stats-panel.js';
 import { renderIcon } from './icons.js';
 import { createAgentActivity } from './agent-activity.js';
@@ -85,7 +84,6 @@ const agentsPanel = createAgentsPanel({
 });
 const flowsPanel = createFlowsPanel();
 const iconsPanel = createIconsPanel({ getGraphData: () => graphData });
-const cronsPanel = createCronsPanel();
 const statsPanel = createStatsPanel();
 const panels = initPanels({
   onShow: (name) => {
@@ -93,16 +91,11 @@ const panels = initPanels({
     if (name === 'agents') agentsPanel.refresh();
     if (name === 'flows') flowsPanel.refresh();
     if (name === 'icons') iconsPanel.refresh();
-    if (name === 'crons') cronsPanel.refresh();
     if (name === 'stats') statsPanel.refresh();
   },
 });
 const agentActivity = createAgentActivity({ view, getGraphData: () => graphData });
 
-busOn('crons', (data) => {
-  cronsPanel.onCrons(data);
-  statsPanel.onCrons();
-});
 busOn('agents', (snapshot) => {
   agentsPanel.render(snapshot);
   flowsPanel.onAgents();

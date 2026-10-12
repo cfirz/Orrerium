@@ -18,9 +18,6 @@ so expect a first response in about a week rather than within hours.
   `0.0.0.0` publishes an unauthenticated read of your entire vault — plus the endpoints
   below — to anyone who can reach the port. For remote access, use an SSH tunnel or an
   authenticating reverse proxy.
-- **Crons execute code.** `#/crons` schedules headless `claude -p` runs on your machine
-  under your own Claude Code credentials. Anything that can reach the crons API can
-  schedule a process. That is the intended feature, and it is why the previous point matters.
 - **ask-your-brain sends your whole vault.** Every question ships the vault's full text
   to whichever provider is configured — the Anthropic, OpenAI, Gemini or xAI API, a local
   Ollama server, or the local `claude` CLI. See the privacy note under
@@ -37,8 +34,8 @@ so expect a first response in about a week rather than within hours.
 
 In scope: anything letting a page, a vault file, or a network peer read or write outside
 what is described above. Path traversal out of the vault or `public/`, any endpoint that
-writes vault files, XSS in the note renderer that reaches a real vault, or a way to
-schedule a cron without local access all qualify.
+writes vault files, XSS in the note renderer that reaches a real vault, or a way for a
+web page you visit to call the API all qualify.
 
 Out of scope: the consequences of deliberately binding to a public interface, running
 against a vault you do not trust, and anything that requires an attacker who already has
