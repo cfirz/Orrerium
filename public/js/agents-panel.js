@@ -88,8 +88,8 @@ export function createAgentsPanel({ getIcon } = {}) {
         <div class="agents-empty">
           <p>No sessions logged yet.</p>
           <p>Run <code>node hooks/install.js</code> to wire Claude Code into this board
-          (<code>--tool gemini</code> and <code>--tool codex</code> cover the other CLIs; see the
-          Orrerium README, "Agents board") and sessions on this machine will appear here live.</p>
+          (<code>--tool gemini</code> and <code>--tool codex</code> cover the other CLIs; see
+          "Watch your own agents" in the Orrerium README) and sessions on this machine will appear here live.</p>
         </div>`;
       return;
     }

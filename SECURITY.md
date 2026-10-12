@@ -14,6 +14,9 @@ so expect a first response in about a week rather than within hours.
 
 ## What to keep in mind when running it
 
+- **Nothing leaves your machine.** Orrerium makes no outbound network calls: no LLM
+  provider, no telemetry, no API keys. `config.json` and `data/` are gitignored. (Your
+  browser still loads any remote image a note embeds, as Obsidian would.)
 - **Do not expose it to the network.** `host` defaults to `127.0.0.1`. Changing it to
   `0.0.0.0` publishes an unauthenticated read of your entire vault — plus the hook
   ingest endpoint — to anyone who can reach the port. For remote access, use an SSH tunnel or an
@@ -27,9 +30,6 @@ so expect a first response in about a week rather than within hours.
 - **Markdown renders inert.** Raw HTML in a note shows as text, and only `http(s)`,
   `mailto:` and in-page links stay clickable. That covers the `.claude/*.md` files the
   graph scans from other repos, not just the vault.
-- **Nothing leaves your machine.** Orrerium makes no outbound network calls: no LLM
-  provider, no telemetry, no API keys. `config.json` and `data/` are gitignored. (Your
-  browser still loads any remote image a note embeds, as Obsidian would.)
 
 ## Scope
 

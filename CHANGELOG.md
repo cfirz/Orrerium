@@ -7,6 +7,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.5.0] - 2026-10-12
+
+Orrerium is now an agent observatory first: the agent panels lead the nav, a
+first launch plays a demo of them, and everything that talked to an LLM is gone.
+
 ### Added
 
 - Demo replay on a first launch. On the bundled starter vault, before
@@ -221,7 +226,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Zero-dependency Node server (`node server.js`), with `orrerium.bat` and
   `orrerium.sh` as double-click launchers.
 
-[Unreleased]: https://github.com/cfirz/Orrerium/compare/v0.4.0...HEAD
+[Unreleased]: https://github.com/cfirz/Orrerium/compare/v0.5.0...HEAD
+[0.5.0]: https://github.com/cfirz/Orrerium/compare/v0.4.0...v0.5.0
 [0.4.0]: https://github.com/cfirz/Orrerium/compare/v0.3.0...v0.4.0
 [0.3.0]: https://github.com/cfirz/Orrerium/compare/v0.2.0...v0.3.0
 [0.2.0]: https://github.com/cfirz/Orrerium/compare/v0.1.0...v0.2.0
