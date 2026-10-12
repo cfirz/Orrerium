@@ -19,6 +19,19 @@ test('nested sections merge one level deep', () => {
   assert.ok(config.claudeScan.globalDir); // sibling default survives
 });
 
+test('eventRetentionDays defaults to 90 and must be a whole number', () => {
+  assert.equal(mergeConfig({}).eventRetentionDays, 90);
+  assert.equal(mergeConfig({ eventRetentionDays: 0 }).eventRetentionDays, 0);
+  assert.throws(() => mergeConfig({ eventRetentionDays: -1 }), /whole number/);
+  assert.throws(() => mergeConfig({ eventRetentionDays: '30' }), /whole number/);
+  assert.throws(() => mergeConfig({ eventRetentionDays: 7.5 }), /whole number/);
+});
+
+test('a leftover ai block from before 0.5.0 is dropped, not merged', () => {
+  const config = mergeConfig({ ai: { provider: 'anthropic' } });
+  assert.equal(config.ai, undefined);
+});
+
 test('a provided folderTypes map replaces the default wholesale', () => {
   const config = mergeConfig({ folderTypes: { docs: 'idea' } });
   assert.deepEqual(config.folderTypes, { docs: 'idea' }); // no projects/lessons left

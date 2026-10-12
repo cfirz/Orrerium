@@ -11,6 +11,7 @@
     "ideas": "idea",
     "templates": "template"
   },
+  "eventRetentionDays": 90,
   "claudeScan": {
     "roots": [],
     "rescanMs": 300000

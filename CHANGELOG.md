@@ -29,6 +29,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Flows and Stats parse each day's event log once and reuse it until the
   file changes, instead of re-reading the whole fortnight (about 8 MB on
   a busy machine) on every request.
+- Flows lists sessions from the last 14 calendar days, the same window
+  Stats counts, rather than the last 14 day files: with gaps in the log
+  that reached back a month.
 - The live board forgets sessions nobody has heard from in 24 hours.
   They stay in the day logs for Flows and Stats; before, the in-memory
   map, and the snapshot broadcast on every hook event, grew for as long

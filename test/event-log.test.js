@@ -31,6 +31,15 @@ test('recent() reads the newest day files, oldest first', () => withDir((dir) =>
   assert.deepEqual(events.map((e) => e.sessionId), ['s-2026-10-11', 's-2026-10-12']);
 }));
 
+test('recent() windows by calendar date, not by file count', () => withDir((dir) => {
+  write(dir, '2026-09-01'); // six weeks ago: a gap in the log must not pull it in
+  write(dir, '2026-09-29'); // today - 13: the first day of a 14-day window
+  write(dir, '2026-09-28'); // today - 14: just out
+  write(dir, '2026-10-12');
+  const log = createEventLog({ dir, days: 14, now });
+  assert.deepEqual(log.recent().map((e) => e.sessionId), ['s-2026-09-29', 's-2026-10-12']);
+}));
+
 test('recent() re-parses a file only when it changed', () => withDir((dir) => {
   write(dir, '2026-10-11');
   write(dir, '2026-10-12');
@@ -59,7 +68,17 @@ test('recent() skips files dated after tomorrow and non-day files', () => withDi
 test('recent() on a missing dir is empty, not an error', () => {
   const log = createEventLog({ dir: path.join(tmpdir(), 'orrerium-no-such-dir-xyz'), now });
   assert.deepEqual(log.recent(), []);
+  assert.equal(log.hasAny(), false);
 });
+
+test('hasAny() is true once any day file exists', () => withDir((dir) => {
+  const log = createEventLog({ dir, now });
+  assert.equal(log.hasAny(), false);
+  writeFileSync(path.join(dir, 'notes.txt'), 'x');
+  assert.equal(log.hasAny(), false);
+  write(dir, '2026-01-01');
+  assert.equal(log.hasAny(), true);
+}));
 
 test('prune() deletes day files older than retentionDays and nothing else', () => withDir((dir) => {
   write(dir, '2026-07-13'); // 91 days old
