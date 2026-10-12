@@ -71,6 +71,9 @@ export function createAgentsPanel({ getIcon } = {}) {
     head.innerHTML = `
       <h1>AGENTS</h1>
       <div class="board-sub">${work.length} session${work.length === 1 ? '' : 's'} today · ${active} live</div>
+      ${snapshot?.demo ? `<div class="demo-banner"><strong>Demo.</strong> These sessions are scripted, so the
+      board and graph have something to show on a first launch. Run <code>node hooks/install.js</code>
+      and the demo stops the moment your first real session reports.</div>` : ''}
       <div class="board-hint">Every agent session on this machine — Claude Code, Gemini CLI, Codex,
       or anything speaking the generic event shape — reports here through the
       <code>hooks/emit.js</code> relay: orchestrators, their subagents, and what they are running.

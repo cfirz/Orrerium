@@ -15,6 +15,8 @@ import { readJson, writeJson } from './lib/store.js';
 import { createEventLog } from './lib/event-log.js';
 import { readBody } from './lib/http-body.js';
 import { checkRequest } from './lib/request-guard.js';
+import { anchorsFromGraph, shouldRunDemo } from './lib/demo.js';
+import { createDemoFeeder } from './lib/demo-feeder.js';
 
 const config = loadConfig();
 const PUBLIC_DIR = path.join(config.root, 'public');
@@ -108,7 +110,19 @@ function pruneEventLog() {
 pruneEventLog();
 setInterval(pruneEventLog, 86_400_000).unref();
 
-const recentAgentEvents = () => eventLog.recent();
+// --- demo replay: a first launch has something to observe -----------------
+// Only on the bundled starter vault before any hook event was ever logged. It
+// plays into its own tracker, never the log, and the first real hook event
+// stops it for good (that event also creates the log, so no restart replays it).
+
+let demo = shouldRunDemo({
+  demo: config.demo, vaultPath: config.vaultPath, root: config.root, hasEvents: eventLog.hasAny(),
+}) ? createDemoFeeder({ anchors: anchorsFromGraph(graph), onChange: (snap) => broadcast('agents', snap) }) : null;
+if (demo) console.log('[demo] no hook events yet - replaying sample sessions until the first real one arrives');
+
+const agentSnapshot = () => (demo ? demo.snapshot() : agentTracker.snapshot());
+const recentAgentEvents = () => (demo ? demo.events() : eventLog.recent());
+const demoFlag = () => (demo ? { demo: true } : {});
 
 // --- live reload: fs.watch -> eager rebuild -> SSE ------------------------
 
@@ -163,12 +177,12 @@ function route(req, res) {
   }
 
   if (p === '/api/graph') return sendJson(res, 200, graph);
-  if (p === '/api/agents') return sendJson(res, 200, agentTracker.snapshot());
+  if (p === '/api/agents') return sendJson(res, 200, agentSnapshot());
   if (p === '/api/icons') return sendJson(res, 200, { assignments: iconAssignments });
-  if (p === '/api/flows') return sendJson(res, 200, { sessions: summarize(recentAgentEvents()) });
+  if (p === '/api/flows') return sendJson(res, 200, { sessions: summarize(recentAgentEvents()), ...demoFlag() });
   if (p === '/api/stats') {
     // recomputed per request, like /api/flows - see the note in lib/stats.js
-    return sendJson(res, 200, buildStats({ events: recentAgentEvents() }));
+    return sendJson(res, 200, { ...buildStats({ events: recentAgentEvents() }), ...demoFlag() });
   }
   if (p.startsWith('/api/flows/')) {
     let sessionId;
@@ -234,6 +248,11 @@ async function handleHookEvent(req, res, source) {
     return sendJson(res, 400, { error: 'body must be a JSON hook payload' });
   }
   if (!raw || typeof raw !== 'object') return sendJson(res, 400, { error: 'not an object' });
+  if (demo) {
+    demo.stop();
+    demo = null;
+    console.log('[demo] first real hook event - demo replay stopped');
+  }
   agentTracker.record(raw, source ?? undefined);
   broadcast('agents', agentTracker.snapshot());
   res.writeHead(204);

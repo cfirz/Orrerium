@@ -89,7 +89,12 @@ const panels = initPanels({
 });
 const agentActivity = createAgentActivity({ view, getGraphData: () => graphData });
 
+// the server replays sample sessions on a first launch; say so wherever they show
+const demoBadge = document.getElementById('demo-badge');
+const setDemo = (snapshot) => { demoBadge.hidden = !snapshot?.demo; };
+
 busOn('agents', (snapshot) => {
+  setDemo(snapshot);
   agentsPanel.render(snapshot);
   flowsPanel.onAgents();
   statsPanel.onAgents();
@@ -109,7 +114,9 @@ fetch('/api/icons').then((r) => (r.ok ? r.json() : null)).then((data) => {
 // SSE only pushes on a *new* hook event, so a reload mid-session would show a dead
 // graph until the next tool call - seed the activity from the current snapshot
 fetch('/api/agents').then((r) => (r.ok ? r.json() : null)).then((snapshot) => {
-  if (snapshot) agentActivity.onSnapshot(snapshot);
+  if (!snapshot) return;
+  setDemo(snapshot);
+  agentActivity.onSnapshot(snapshot);
 });
 
 function selectNode(id, opts = {}) {

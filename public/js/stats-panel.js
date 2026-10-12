@@ -32,7 +32,7 @@ export function createStatsPanel() {
 
   function render(stats) {
     head.innerHTML = `<h1>STATS</h1>
-      <div class="board-sub">last ${stats.days.length} days of agent activity</div>`;
+      <div class="board-sub">last ${stats.days.length} days of agent activity${stats.demo ? ' · demo data' : ''}</div>`;
     const t = stats.totals;
     tiles.innerHTML = [
       tile(t.sessions, 'sessions'),

@@ -27,6 +27,12 @@ test('eventRetentionDays defaults to 90 and must be a whole number', () => {
   assert.throws(() => mergeConfig({ eventRetentionDays: 7.5 }), /whole number/);
 });
 
+test('demo defaults on and must be a boolean', () => {
+  assert.equal(mergeConfig({}).demo, true);
+  assert.equal(mergeConfig({ demo: false }).demo, false);
+  assert.throws(() => mergeConfig({ demo: 'auto' }), /true or false/);
+});
+
 test('a leftover ai block from before 0.5.0 is dropped, not merged', () => {
   const config = mergeConfig({ ai: { provider: 'anthropic' } });
   assert.equal(config.ai, undefined);

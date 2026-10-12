@@ -9,6 +9,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- Demo replay on a first launch. On the bundled starter vault, before
+  any hook event has been logged, the server plays scripted sessions
+  over the starter projects. The graph lights up (sparks, subagent rings,
+  the vault core), the Agents board has live cards, and Flows and Stats
+  show a week of sample history. A `demo` badge in the topbar and a
+  banner on the board say what it is. The first real hook event stops
+  it for good, and nothing it plays is ever written to `data/`.
+  `"demo": false` in `config.json` turns it off.
 - The Inbox tab in the topbar shows how many captures are waiting,
   live as `inbox.md` changes, and turns green once the buffer passes
   the triage threshold. Hidden when the inbox is empty.

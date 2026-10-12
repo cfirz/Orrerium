@@ -91,6 +91,32 @@ body {
 .nav-count[hidden] { display: none; }
 .nav-count.ready { background: var(--c-idea); color: var(--bg); }
 
+/* shown while the server replays its first-launch sample sessions */
+.demo-badge {
+  margin-left: auto;
+  padding: 1px 7px;
+  border: 1px solid var(--accent);
+  border-radius: 8px;
+  color: var(--accent);
+  font-size: 10px;
+  letter-spacing: 1.5px;
+  text-transform: uppercase;
+  text-decoration: none;
+  flex: none;
+}
+.demo-badge[hidden] { display: none; }
+.demo-badge:not([hidden]) + .status-dot { margin-left: 0; }
+.demo-banner {
+  border: 1px solid var(--accent);
+  border-radius: 8px;
+  padding: 8px 12px;
+  margin: 8px 0 10px;
+  max-width: 860px;
+  font-size: 12px;
+  color: var(--text);
+}
+.demo-banner strong { color: var(--accent); }
+
 .status-dot {
   margin-left: auto;
   width: 8px; height: 8px; border-radius: 50%;

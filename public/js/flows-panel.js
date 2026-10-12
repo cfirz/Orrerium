@@ -121,10 +121,11 @@ export function createFlowsPanel() {
   async function refresh() {
     const res = await fetch('/api/flows');
     if (!res.ok) return;
-    sessions = (await res.json()).sessions;
+    const json = await res.json();
+    sessions = json.sessions;
     head.innerHTML = `
       <h1>FLOWS</h1>
-      <div class="board-sub">${sessions.length} session${sessions.length === 1 ? '' : 's'} in the last fortnight</div>
+      <div class="board-sub">${sessions.length} session${sessions.length === 1 ? '' : 's'} in the last fortnight${json.demo ? ' · demo data' : ''}</div>
       <div class="board-hint">Pick a session, scrub or replay it. Subagent spans stack above the orchestrator lane.</div>`;
     select.innerHTML = sessions.map((s) => {
       const when = new Date(s.start).toLocaleString();
