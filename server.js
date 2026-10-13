@@ -1,21 +1,22 @@
 import http from 'node:http';
 import path from 'node:path';
-import { readFileSync, readdirSync } from 'node:fs';
+import { readFileSync } from 'node:fs';
 import { loadConfig } from './lib/config.js';
 import { serveStatic } from './lib/static.js';
 import { parseVault, parseSkills, parseFrontmatter } from './lib/vault.js';
 import { buildGraph } from './lib/graph.js';
 import { watchVault } from './lib/watch.js';
-import { ask, resolveProvider } from './lib/ask.js';
 import { sseHandler, broadcast } from './lib/sse.js';
 import { scanClaudeAssets, mergeClaudeAssets } from './lib/claude-scan.js';
 import { createAgentTracker } from './lib/agents.js';
 import { summarize, groupSessions, buildFlow } from './lib/flows.js';
-import { buildStats } from './lib/stats.js';
-import { readLines, readJson, writeJson } from './lib/store.js';
+import { buildStats, STATS_DAYS } from './lib/stats.js';
+import { readJson, writeJson } from './lib/store.js';
+import { createEventLog } from './lib/event-log.js';
 import { readBody } from './lib/http-body.js';
-import { createCronRunner } from './lib/crons.js';
-import { createAskHistory } from './lib/ask-history.js';
+import { checkRequest } from './lib/request-guard.js';
+import { anchorsFromGraph, shouldRunDemo } from './lib/demo.js';
+import { createDemoFeeder } from './lib/demo-feeder.js';
 
 const config = loadConfig();
 const PUBLIC_DIR = path.join(config.root, 'public');
@@ -25,14 +26,12 @@ const SLUG_RE = /^[A-Za-z0-9][A-Za-z0-9._-]*$/;
 
 let graph = null;
 let noteIndex = new Map(); // id -> { path, folder, type }
-let corpus = { notes: [], skills: [] }; // parsed content, reused by /api/ask
 let claudeAssets = { items: [], warnings: [] }; // cross-repo scan, refreshed on its own cadence
 let claudeKey = null;
 
 function rebuild() {
   const parsed = parseVault(config.vaultPath, { excludeDirs: config.excludeDirs, folderTypes: config.folderTypes });
   const { skills, warnings: skillWarnings } = parseSkills(config.vaultPath);
-  corpus = { notes: parsed.notes, skills };
   graph = {
     generatedAt: new Date().toISOString(),
     vaultPath: config.vaultPath.replaceAll('\\', '/'),
@@ -64,12 +63,25 @@ function rescanClaude() {
 }
 
 rescanClaude();
-rebuild();
+rebuild(); // a broken vault at startup should fail loudly, so unguarded here
+
+// later rebuilds run from timers, where a throw kills the process: a folder
+// vanishing mid-walk or the vault drive going away keeps the last good graph
+function safeRebuild() {
+  try {
+    rebuild();
+    return true;
+  } catch (err) {
+    console.error(`[vault] rebuild failed, keeping the last graph: ${err.message}`);
+    return false;
+  }
+}
 
 setInterval(() => {
-  if (rescanClaude()) {
-    rebuild();
-    broadcast('vault', { files: [] });
+  try {
+    if (rescanClaude() && safeRebuild()) broadcast('vault', { files: [] });
+  } catch (err) {
+    console.error(`[claude-scan] rescan failed: ${err.message}`);
   }
 }, config.claudeScan.rescanMs).unref();
 
@@ -81,59 +93,48 @@ const agentTracker = createAgentTracker({ dataDir: config.dataDir });
   if (replayed) console.log(`[agents] replayed ${replayed} events from today's log`);
 }
 
-// flows read the same NDJSON log the tracker writes, a fortnight back
-const FLOW_DAYS = 14;
+// flows and stats read the same NDJSON log the tracker writes, a fortnight
+// back, memoized per day file; retention prunes it at startup and daily
+const eventLog = createEventLog({
+  dir: path.join(config.dataDir, 'agent-events'),
+  days: STATS_DAYS,
+  retentionDays: config.eventRetentionDays,
+});
 
-function recentAgentEvents() {
-  const dir = path.join(config.dataDir, 'agent-events');
-  let files;
-  try {
-    files = readdirSync(dir).filter((f) => f.endsWith('.ndjson')).sort().slice(-FLOW_DAYS);
-  } catch {
-    return []; // no events logged yet
+function pruneEventLog() {
+  const removed = eventLog.prune();
+  if (removed.length) {
+    console.log(`[agents] pruned ${removed.length} day log(s) older than ${config.eventRetentionDays} days`);
   }
-  return files.flatMap((f) => readLines(path.join(dir, f)));
 }
+pruneEventLog();
+setInterval(pruneEventLog, 86_400_000).unref();
+
+// --- demo replay: a first launch has something to observe -----------------
+// Only on the bundled starter vault before any hook event was ever logged. It
+// plays into its own tracker, never the log, and the first real hook event
+// stops it for good (that event also creates the log, so no restart replays it).
+
+let demo = shouldRunDemo({
+  demo: config.demo, vaultPath: config.vaultPath, root: config.root, hasEvents: eventLog.hasAny(),
+}) ? createDemoFeeder({ anchors: anchorsFromGraph(graph), onChange: (snap) => broadcast('agents', snap) }) : null;
+if (demo) console.log('[demo] no hook events yet - replaying sample sessions until the first real one arrives');
+
+const agentSnapshot = () => (demo ? demo.snapshot() : agentTracker.snapshot());
+const recentAgentEvents = () => (demo ? demo.events() : eventLog.recent());
+const demoFlag = () => (demo ? { demo: true } : {});
 
 // --- live reload: fs.watch -> eager rebuild -> SSE ------------------------
 
 watchVault(config.vaultPath, {
   excludeDirs: config.excludeDirs,
   onChange: (files) => {
-    rebuild(); // rebuild BEFORE notifying so the client refetch never races the parser
+    // rebuild BEFORE notifying so the client refetch never races the parser
+    if (!safeRebuild()) return;
     broadcast('vault', { files });
     console.log(`[watch] ${files.join(', ')}`);
   },
 });
-
-// --- http -----------------------------------------------------------------
-
-// --- crons: in-process scheduler running `claude -p` headless ---------------
-
-// cron runs impersonate sessions on the agents board/flows via synthetic events
-const cronSession = (job, startTs) => `cron-${job.id}-${startTs}`;
-
-const cronRunner = createCronRunner({
-  dataDir: config.dataDir,
-  ai: config.ai,
-  onChange: () => broadcast('crons', { jobs: cronRunner.list() }),
-  onRunStart: (job, ts) => {
-    agentTracker.record({ ts, event: 'SessionStart', sessionId: cronSession(job, ts), cwd: job.cwd ?? config.root }, 'cron');
-    agentTracker.record({ ts, event: 'UserPromptSubmit', sessionId: cronSession(job, ts), cwd: job.cwd ?? config.root, prompt: `[cron ${job.name}] ${job.prompt}` }, 'cron');
-    broadcast('agents', agentTracker.snapshot());
-    console.log(`[crons] ${job.id} started`);
-  },
-  onRunEnd: (job, record) => {
-    agentTracker.record({ ts: record.endedAt, event: 'SessionEnd', sessionId: cronSession(job, record.startedAt), cwd: job.cwd ?? config.root }, 'cron');
-    broadcast('agents', agentTracker.snapshot());
-    console.log(`[crons] ${job.id} ${record.status} in ${Math.round(record.ms / 1000)}s`);
-  },
-});
-cronRunner.start();
-
-// --- ask conversation history: saved server-side on every answered turn ----
-
-const askHistory = createAskHistory({ dataDir: config.dataDir });
 
 // --- icon assignments: agent id -> icon name (catalog lives client-side) ---
 
@@ -142,24 +143,33 @@ const ICON_NAME_RE = /^[a-z0-9-]{1,32}$/;
 let iconAssignments = readJson(ICON_FILE, {});
 
 const server = http.createServer((req, res) => {
-  const url = new URL(req.url, `http://${req.headers.host ?? 'localhost'}`);
+  const refused = checkRequest(req, config);
+  if (refused) return sendJson(res, refused.status, { error: refused.error });
+  // one bad request answers 500 instead of taking the server down with it -
+  // the sync routes throw into the promise, the async handlers reject into it
+  Promise.resolve()
+    .then(() => route(req, res))
+    .catch((err) => {
+      console.error(`[http] ${req.method} ${req.url}: ${err.stack ?? err.message}`);
+      if (!res.headersSent) sendJson(res, 500, { error: 'internal error' });
+      else res.destroy();
+    });
+});
+
+function route(req, res) {
+  // a fixed base: only the path and query matter, and the Host header is
+  // client input (already pinned by the guard on a loopback listener). Even
+  // so, a request target like "//" is no URL at all - a client error, not a 500
+  let url;
+  try {
+    url = new URL(req.url, 'http://localhost');
+  } catch {
+    return sendJson(res, 400, { error: 'malformed request URL' });
+  }
   const p = url.pathname;
 
-  if (req.method === 'POST' && p === '/api/ask') return handleAsk(req, res);
   if (req.method === 'POST' && p === '/api/hook-event') return handleHookEvent(req, res, url.searchParams.get('source'));
   if (req.method === 'POST' && p === '/api/icons/assign') return handleIconAssign(req, res);
-  if (req.method === 'POST' && p === '/api/crons') return handleCronUpsert(req, res);
-  const cronRun = /^\/api\/crons\/([A-Za-z0-9._-]+)\/run$/.exec(p);
-  if (req.method === 'POST' && cronRun) return handleCronRun(cronRun[1], res);
-  const cronDel = /^\/api\/crons\/([A-Za-z0-9._-]+)$/.exec(p);
-  if (req.method === 'DELETE' && cronDel) {
-    cronRunner.remove(cronDel[1]);
-    return sendJson(res, 200, { jobs: cronRunner.list() });
-  }
-  const askHistDel = /^\/api\/ask\/history\/([A-Za-z0-9._-]+)$/.exec(p);
-  if (req.method === 'DELETE' && askHistDel) {
-    return sendJson(res, 200, { conversations: askHistory.remove(askHistDel[1]) });
-  }
   if (req.method !== 'GET' && req.method !== 'HEAD') {
     res.writeHead(405, { 'Content-Type': 'text/plain; charset=utf-8' });
     res.end('Method not allowed');
@@ -167,28 +177,12 @@ const server = http.createServer((req, res) => {
   }
 
   if (p === '/api/graph') return sendJson(res, 200, graph);
-  if (p === '/api/agents') return sendJson(res, 200, agentTracker.snapshot());
+  if (p === '/api/agents') return sendJson(res, 200, agentSnapshot());
   if (p === '/api/icons') return sendJson(res, 200, { assignments: iconAssignments });
-  if (p === '/api/crons') return sendJson(res, 200, { jobs: cronRunner.list() });
-  if (p === '/api/ask/history') return sendJson(res, 200, { conversations: askHistory.list() });
-  const askHistGet = /^\/api\/ask\/history\/([A-Za-z0-9._-]+)$/.exec(p);
-  if (askHistGet) {
-    const conversation = askHistory.get(askHistGet[1]);
-    if (!conversation) return sendJson(res, 404, { error: `no conversation "${askHistGet[1]}"` });
-    return sendJson(res, 200, { conversation });
-  }
-  const cronRuns = /^\/api\/crons\/([A-Za-z0-9._-]+)\/runs$/.exec(p);
-  if (cronRuns) return sendJson(res, 200, { runs: cronRunner.runsFor(cronRuns[1]) });
-  if (p === '/api/flows') return sendJson(res, 200, { sessions: summarize(recentAgentEvents()) });
+  if (p === '/api/flows') return sendJson(res, 200, { sessions: summarize(recentAgentEvents()), ...demoFlag() });
   if (p === '/api/stats') {
     // recomputed per request, like /api/flows - see the note in lib/stats.js
-    const jobs = cronRunner.list();
-    return sendJson(res, 200, buildStats({
-      events: recentAgentEvents(),
-      cronJobs: jobs,
-      cronRunsByJob: Object.fromEntries(jobs.map((j) => [j.id, cronRunner.runsFor(j.id)])),
-      conversations: askHistory.list(),
-    }));
+    return sendJson(res, 200, { ...buildStats({ events: recentAgentEvents() }), ...demoFlag() });
   }
   if (p.startsWith('/api/flows/')) {
     let sessionId;
@@ -212,8 +206,8 @@ const server = http.createServer((req, res) => {
     }
     return serveNote(slug, res);
   }
-  serveStatic(PUBLIC_DIR, p, res);
-});
+  return serveStatic(PUBLIC_DIR, p, res);
+}
 
 function serveNote(slug, res) {
   if (!SLUG_RE.test(slug)) return sendJson(res, 400, { error: 'invalid slug' });
@@ -234,82 +228,8 @@ function serveNote(slug, res) {
   });
 }
 
-async function handleAsk(req, res) {
-  const body = await readBody(req, res, 64 * 1024);
-  if (body === null) return;
-  let payload;
-  try {
-    payload = JSON.parse(body);
-  } catch {
-    return sendJson(res, 400, { error: 'body must be JSON: {"question": "..."}' });
-  }
-  const question = payload?.question;
-  if (typeof question !== 'string' || !question.trim() || question.length > 4000) {
-    return sendJson(res, 400, { error: 'question must be a non-empty string (max 4000 chars)' });
-  }
-  if (payload?.conversationId != null && !(typeof payload.conversationId === 'string' && SLUG_RE.test(payload.conversationId))) {
-    return sendJson(res, 400, { error: 'invalid conversationId' });
-  }
-  // prior turns from the client, sanitized: role/content pairs only, capped
-  const history = (Array.isArray(payload?.history) ? payload.history : [])
-    .filter((h) => (h?.role === 'user' || h?.role === 'assistant') && typeof h?.content === 'string' && h.content.length <= 16000)
-    .slice(-20);
-  const record = (result) => {
-    // a disk hiccup must not turn a good answer into an error
-    try {
-      return askHistory.record({
-        id: payload.conversationId, history, question: question.trim(),
-        answer: result.answer, provider: result.provider, model: result.model,
-      }).id;
-    } catch (err) {
-      console.error(`[ask] history write failed: ${err.message}`);
-      return null;
-    }
-  };
-
-  if (payload?.stream === true) {
-    // NDJSON relay: {type:meta}, {type:delta}* then {type:done} or {type:error}.
-    // The status is committed before the provider runs, so provider failures
-    // ride an error line, not an HTTP code.
-    res.writeHead(200, {
-      'Content-Type': 'application/x-ndjson; charset=utf-8',
-      'Cache-Control': 'no-store',
-    });
-    const abort = new AbortController();
-    res.on('close', () => {
-      if (!res.writableEnded) abort.abort(); // client went away - stop the provider
-    });
-    const line = (obj) => {
-      if (!abort.signal.aborted) res.write(`${JSON.stringify(obj)}\n`);
-    };
-    line({ type: 'meta', provider: resolveProvider(config.ai) });
-    try {
-      const result = await ask(question.trim(), {
-        ...corpus, ai: config.ai, history,
-        onDelta: (text) => line({ type: 'delta', text }),
-        signal: abort.signal,
-      });
-      line({ type: 'done', ...result, conversationId: record(result) });
-    } catch (err) {
-      // an aborted provider call is the client leaving, not an error
-      if (!abort.signal.aborted) console.error(`[ask] ${err.message}`);
-      line({ type: 'error', error: err.message });
-    }
-    res.end();
-    return;
-  }
-
-  try {
-    const result = await ask(question.trim(), { ...corpus, ai: config.ai, history });
-    sendJson(res, 200, { ...result, conversationId: record(result) });
-  } catch (err) {
-    console.error(`[ask] ${err.message}`);
-    sendJson(res, 502, { error: err.message });
-  }
-}
-
-// hook payloads can be big (whole tool inputs/responses ride along) - higher
-// cap than /api/ask, and the tracker whitelists/truncates before persisting.
+// hook payloads can be big (whole tool inputs/responses ride along) - the
+// highest body cap here, and the tracker whitelists/truncates before persisting.
 // ?source= names the wire dialect (claude-code when absent, so every already
 // installed hook keeps working); any other well-formed slug is accepted and
 // read as the normalized generic shape - that is the open ingest contract.
@@ -328,36 +248,15 @@ async function handleHookEvent(req, res, source) {
     return sendJson(res, 400, { error: 'body must be a JSON hook payload' });
   }
   if (!raw || typeof raw !== 'object') return sendJson(res, 400, { error: 'not an object' });
+  if (demo) {
+    demo.stop();
+    demo = null;
+    console.log('[demo] first real hook event - demo replay stopped');
+  }
   agentTracker.record(raw, source ?? undefined);
   broadcast('agents', agentTracker.snapshot());
   res.writeHead(204);
   res.end();
-}
-
-async function handleCronUpsert(req, res) {
-  const body = await readBody(req, res, 64 * 1024);
-  if (body === null) return;
-  let def;
-  try {
-    def = JSON.parse(body);
-  } catch {
-    return sendJson(res, 400, { error: 'body must be a JSON cron definition' });
-  }
-  try {
-    const job = cronRunner.upsert(def);
-    sendJson(res, 200, { job });
-  } catch (err) {
-    sendJson(res, 400, { error: err.message });
-  }
-}
-
-async function handleCronRun(id, res) {
-  try {
-    const record = await cronRunner.runNow(id);
-    sendJson(res, 200, record ? { record } : { alreadyRunning: true });
-  } catch (err) {
-    sendJson(res, 404, { error: err.message });
-  }
 }
 
 async function handleIconAssign(req, res) {

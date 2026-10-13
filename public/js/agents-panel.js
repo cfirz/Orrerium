@@ -1,5 +1,5 @@
 // Agents board: one card per coding-agent session (Claude Code, Gemini CLI,
-// Codex, crons, or anything POSTing the generic shape), fed live by hook
+// Codex, or anything POSTing the generic shape), fed live by hook
 // events over the bus. Empty until at least one tool's hooks are installed.
 import { escapeHtml } from './md.js';
 
@@ -71,8 +71,11 @@ export function createAgentsPanel({ getIcon } = {}) {
     head.innerHTML = `
       <h1>AGENTS</h1>
       <div class="board-sub">${work.length} session${work.length === 1 ? '' : 's'} today · ${active} live</div>
+      ${snapshot?.demo ? `<div class="demo-banner"><strong>Demo.</strong> These sessions are scripted, so the
+      board and graph have something to show on a first launch. Run <code>node hooks/install.js</code>
+      and the demo stops the moment your first real session reports.</div>` : ''}
       <div class="board-hint">Every agent session on this machine — Claude Code, Gemini CLI, Codex,
-      crons, or anything speaking the generic event shape — reports here through the
+      or anything speaking the generic event shape — reports here through the
       <code>hooks/emit.js</code> relay: orchestrators, their subagents, and what they are running.
       System is the Claude desktop app's own plumbing: startup artifacts and housekeeping closures.</div>
       <div class="agents-filters">${FILTERS.map(([id, label, pred]) => `
@@ -85,8 +88,8 @@ export function createAgentsPanel({ getIcon } = {}) {
         <div class="agents-empty">
           <p>No sessions logged yet.</p>
           <p>Run <code>node hooks/install.js</code> to wire Claude Code into this board
-          (<code>--tool gemini</code> and <code>--tool codex</code> cover the other CLIs; see the
-          Orrerium README, "Agents board") and sessions on this machine will appear here live.</p>
+          (<code>--tool gemini</code> and <code>--tool codex</code> cover the other CLIs; see
+          "Watch your own agents" in the Orrerium README) and sessions on this machine will appear here live.</p>
         </div>`;
       return;
     }

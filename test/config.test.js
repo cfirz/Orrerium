@@ -10,16 +10,32 @@ test('empty raw config gets every default', () => {
   const config = mergeConfig({});
   assert.equal(config.port, 4321);
   assert.deepEqual(config.folderTypes, DEFAULT_FOLDER_TYPES);
-  assert.equal(config.ai.provider, 'auto');
   assert.deepEqual(config.claudeScan.roots, []);
 });
 
 test('nested sections merge one level deep', () => {
-  const config = mergeConfig({ ai: { model: 'claude-sonnet-5' }, claudeScan: { rescanMs: 1000 } });
-  assert.equal(config.ai.model, 'claude-sonnet-5');
-  assert.equal(config.ai.provider, 'auto'); // sibling default survives
+  const config = mergeConfig({ claudeScan: { rescanMs: 1000 } });
   assert.equal(config.claudeScan.rescanMs, 1000);
   assert.ok(config.claudeScan.globalDir); // sibling default survives
+});
+
+test('eventRetentionDays defaults to 90 and must be a whole number', () => {
+  assert.equal(mergeConfig({}).eventRetentionDays, 90);
+  assert.equal(mergeConfig({ eventRetentionDays: 0 }).eventRetentionDays, 0);
+  assert.throws(() => mergeConfig({ eventRetentionDays: -1 }), /whole number/);
+  assert.throws(() => mergeConfig({ eventRetentionDays: '30' }), /whole number/);
+  assert.throws(() => mergeConfig({ eventRetentionDays: 7.5 }), /whole number/);
+});
+
+test('demo defaults on and must be a boolean', () => {
+  assert.equal(mergeConfig({}).demo, true);
+  assert.equal(mergeConfig({ demo: false }).demo, false);
+  assert.throws(() => mergeConfig({ demo: 'auto' }), /true or false/);
+});
+
+test('a leftover ai block from before 0.5.0 is dropped, not merged', () => {
+  const config = mergeConfig({ ai: { provider: 'anthropic' } });
+  assert.equal(config.ai, undefined);
 });
 
 test('a provided folderTypes map replaces the default wholesale', () => {

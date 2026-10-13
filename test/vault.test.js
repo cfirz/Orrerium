@@ -56,6 +56,14 @@ test('stripCode removes fenced blocks and inline code', () => {
   assert.deepEqual(extractWikilinks(out), ['real']);
 });
 
+test('extractWikilinks: alias and heading forms link to their slug', () => {
+  assert.deepEqual(
+    extractWikilinks('[[plain]] [[orbit-tracker|the tracker]] [[node-toolchain#PATH]] [[a#h|both]] [[ spaced ]]'),
+    ['plain', 'orbit-tracker', 'node-toolchain', 'a', 'spaced'],
+  );
+  assert.deepEqual(extractWikilinks('[[]] [[|x]] [[#only-heading]]'), []);
+});
+
 test('extractMarkdownLinks: relative .md paths kept, external ignored', () => {
   const links = extractMarkdownLinks('[a](projects/orbit-tracker.md) [b](https://x.com/y.md) [c](#anchor)');
   assert.deepEqual(links, ['projects/orbit-tracker.md']);

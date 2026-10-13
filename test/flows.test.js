@@ -81,6 +81,7 @@ test('summarize keeps only sessions with tool calls or subagent evidence', () =>
     { ts: 600, event: 'SessionEnd', sessionId: 'startup', cwd: 'C:/Users/Home' },
   ];
   const housekeeping = [{ ts: 200, event: 'SessionEnd', sessionId: 'old-one', cwd: 'C:/X/Y' }];
+  // pre-0.5 cron runs left these synthetic prompt-only markers in old logs
   const cronMarker = [
     { ts: 300, event: 'SessionStart', sessionId: 'cron-x-300', cwd: 'C:/X/Y' },
     { ts: 300, event: 'UserPromptSubmit', sessionId: 'cron-x-300', prompt: '[cron X] go' },

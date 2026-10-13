@@ -30,7 +30,7 @@ export function createNotePanel({ el, onNavigate, onClose, hasNote, getEdges }) 
     const tags = Array.isArray(fm.tags) ? fm.tags : [];
     el.innerHTML = `
       <div class="note-head">
-        <button class="close-btn" title="Close">✕</button>
+        <button class="close-btn" title="Close" aria-label="Close note">✕</button>
         <h1>${escapeHtml(note.id)}</h1>
         <div>
           <span class="badge ${escapeHtml(note.type)}">${escapeHtml(note.type)}</span>
@@ -57,7 +57,7 @@ export function createNotePanel({ el, onNavigate, onClose, hasNote, getEdges }) 
     }
     el.innerHTML = `
       <div class="note-head">
-        <button class="close-btn" title="Close">✕</button>
+        <button class="close-btn" title="Close" aria-label="Close note">✕</button>
         <h1>${escapeHtml(id)}</h1>
         <div><span class="badge unresolved">unresolved</span></div>
       </div>
@@ -76,7 +76,7 @@ export function createNotePanel({ el, onNavigate, onClose, hasNote, getEdges }) 
     const members = allNodes.filter((n) => n.type !== 'application' && n.tags.includes(tag));
     el.innerHTML = `
       <div class="note-head">
-        <button class="close-btn" title="Close">✕</button>
+        <button class="close-btn" title="Close" aria-label="Close note">✕</button>
         <h1>${escapeHtml(node.id)}</h1>
         <div><span class="badge application">application</span><span class="tag-chip">#${escapeHtml(tag)}</span></div>
         <div class="note-desc">Everything in the vault touching ${escapeHtml(tag)}.</div>

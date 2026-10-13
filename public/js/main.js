@@ -1,15 +1,12 @@
 import { createGraphView } from './graph-view.js';
 import { createNotePanel } from './note-panel.js';
 import { initSearch } from './search.js';
-import { initAskPanel } from './ask-panel.js';
-import { initAskHistory } from './ask-history.js';
 import { initPanels } from './panels.js';
 import { createProjectsPanel } from './projects-panel.js';
 import { createInboxPanel } from './inbox-panel.js';
 import { createAgentsPanel } from './agents-panel.js';
 import { createFlowsPanel } from './flows-panel.js';
 import { createIconsPanel } from './icons-panel.js';
-import { createCronsPanel } from './crons-panel.js';
 import { createStatsPanel } from './stats-panel.js';
 import { renderIcon } from './icons.js';
 import { createAgentActivity } from './agent-activity.js';
@@ -66,11 +63,6 @@ const search = initSearch({
   onPick: (id) => selectNode(id, { focus: true }),
 });
 
-const askPanel = initAskPanel({
-  onNavigate: (slug) => selectNode(slug, { focus: true }),
-});
-initAskHistory({ onRestore: (conv) => askPanel.restore(conv) });
-
 // --- dashboard panels -----------------------------------------------------
 
 function openInGraph(id) {
@@ -85,7 +77,6 @@ const agentsPanel = createAgentsPanel({
 });
 const flowsPanel = createFlowsPanel();
 const iconsPanel = createIconsPanel({ getGraphData: () => graphData });
-const cronsPanel = createCronsPanel();
 const statsPanel = createStatsPanel();
 const panels = initPanels({
   onShow: (name) => {
@@ -93,17 +84,17 @@ const panels = initPanels({
     if (name === 'agents') agentsPanel.refresh();
     if (name === 'flows') flowsPanel.refresh();
     if (name === 'icons') iconsPanel.refresh();
-    if (name === 'crons') cronsPanel.refresh();
     if (name === 'stats') statsPanel.refresh();
   },
 });
 const agentActivity = createAgentActivity({ view, getGraphData: () => graphData });
 
-busOn('crons', (data) => {
-  cronsPanel.onCrons(data);
-  statsPanel.onCrons();
-});
+// the server replays sample sessions on a first launch; say so wherever they show
+const demoBadge = document.getElementById('demo-badge');
+const setDemo = (snapshot) => { demoBadge.hidden = !snapshot?.demo; };
+
 busOn('agents', (snapshot) => {
+  setDemo(snapshot);
   agentsPanel.render(snapshot);
   flowsPanel.onAgents();
   statsPanel.onAgents();
@@ -123,7 +114,17 @@ fetch('/api/icons').then((r) => (r.ok ? r.json() : null)).then((data) => {
 // SSE only pushes on a *new* hook event, so a reload mid-session would show a dead
 // graph until the next tool call - seed the activity from the current snapshot
 fetch('/api/agents').then((r) => (r.ok ? r.json() : null)).then((snapshot) => {
-  if (snapshot) agentActivity.onSnapshot(snapshot);
+  if (!snapshot) return;
+  setDemo(snapshot);
+  agentActivity.onSnapshot(snapshot);
+});
+
+// Escape closes the open note - unless focus is in a field, where Escape
+// already means something (search clears itself)
+document.addEventListener('keydown', (ev) => {
+  if (ev.key !== 'Escape' || !selectedId || document.body.dataset.panel !== 'brain') return;
+  if (ev.target.closest?.('input, textarea, select')) return;
+  selectNode(null);
 });
 
 function selectNode(id, opts = {}) {
@@ -178,6 +179,7 @@ function connectEvents() {
     dot.classList.toggle('live', connected);
     dot.classList.toggle('down', !connected);
     dot.title = connected ? 'live - watching the vault' : 'disconnected - retrying';
+    dot.setAttribute('aria-label', dot.title);
     // a reconnect may have missed events; refetch (initial load already did)
     if (connected && !firstOpen) {
       loadGraph();

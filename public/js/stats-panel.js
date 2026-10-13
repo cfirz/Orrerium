@@ -14,8 +14,6 @@ export function createStatsPanel() {
   const tiles = document.getElementById('stats-tiles');
   const daysEl = document.getElementById('stats-days');
   const toolsEl = document.getElementById('stats-tools');
-  const cronsEl = document.getElementById('stats-crons');
-  const askEl = document.getElementById('stats-ask');
   let refreshTimer = null;
 
   async function refresh() {
@@ -34,26 +32,23 @@ export function createStatsPanel() {
 
   function render(stats) {
     head.innerHTML = `<h1>STATS</h1>
-      <div class="board-sub">last ${stats.days.length} days of agent, cron and ask activity</div>`;
+      <div class="board-sub">last ${stats.days.length} days of agent activity${stats.demo ? ' · demo data' : ''}</div>`;
     const t = stats.totals;
     tiles.innerHTML = [
-      tile(t.interactiveSessions, 'sessions'),
-      tile(t.cronSessions, 'cron runs'),
+      tile(t.sessions, 'sessions'),
       tile(t.toolCalls, 'tool calls'),
       tile(t.errors, 'tool errors'),
       tile(t.subagentSpawns, 'subagents'),
       tile(t.activeMs ? fmtDur(t.activeMs) : '0s', 'active time'),
     ].join('');
-    const empty = t.toolCalls === 0 && stats.crons.length === 0 && stats.ask.conversations === 0;
+    const empty = t.toolCalls === 0 && t.sessions === 0;
     daysEl.innerHTML = empty
-      ? '<p class="agents-empty">Stats build up from the Agents-board hooks, cron runs and ask conversations — nothing logged yet.</p>'
+      ? '<p class="agents-empty">Stats build up from the Agents-board hooks — nothing logged yet.</p>'
       : chart(stats.days);
     toolsEl.innerHTML = `<div class="stats-h">TOP TOOLS</div>${toolRows(stats.topTools)}`;
-    cronsEl.innerHTML = `<div class="stats-h">CRONS</div>${cronRows(stats.crons)}`;
-    askEl.innerHTML = `<div class="stats-h">ASK</div>${askRows(stats.ask)}`;
   }
 
-  return { refresh, onAgents: poke, onCrons: poke };
+  return { refresh, onAgents: poke };
 }
 
 const tile = (value, label) =>
@@ -100,23 +95,4 @@ function toolRows(topTools) {
       <div class="tool-track"><div class="tool-bar" style="width: ${Math.max(2, (count / max) * 100)}%"></div></div>
       <span class="tool-count">${count}</span>
     </div>`).join('');
-}
-
-function cronRows(crons) {
-  if (crons.length === 0) return '<p class="agents-empty">No cron jobs yet.</p>';
-  return crons.map((c) => `<div class="stats-cron-row${c.enabled ? '' : ' off'}">
-      <span class="cron-name">${escapeHtml(c.name)}</span>
-      <span class="stats-ok">${c.ok} ok</span>
-      <span class="stats-failed">${c.failed} failed</span>
-      <span class="stats-dim">avg ${c.avgMs ? fmtDur(c.avgMs) : '—'}</span>
-    </div>`).join('');
-}
-
-function askRows(ask) {
-  if (ask.conversations === 0) return '<p class="agents-empty">No conversations yet.</p>';
-  const models = ask.byModel.map((m) => `<div class="stats-ask-row">
-      ${escapeHtml(m.model ?? '?')} <span class="stats-dim">via ${escapeHtml(m.provider ?? '?')}</span>
-      — ${m.conversations} conversation${m.conversations === 1 ? '' : 's'}, ${m.turns} turns
-    </div>`).join('');
-  return `<div class="stats-ask-row">${ask.conversations} saved conversation${ask.conversations === 1 ? '' : 's'}, ${ask.turns} turns (all saved, capped at 100)</div>${models}`;
 }

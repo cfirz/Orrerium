@@ -7,11 +7,27 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.5.0] - 2026-10-12
+
+Orrerium is now an agent observatory first: the agent panels lead the nav, a
+first launch plays a demo of them, and everything that talked to an LLM is gone.
+
 ### Added
 
+- Demo replay on a first launch. On the bundled starter vault, before
+  any hook event has been logged, the server plays scripted sessions
+  over the starter projects. The graph lights up (sparks, subagent rings,
+  the vault core), the Agents board has live cards, and Flows and Stats
+  show a week of sample history. A `demo` badge in the topbar and a
+  banner on the board say what it is. The first real hook event stops
+  it for good, and nothing it plays is ever written to `data/`.
+  `"demo": false` in `config.json` turns it off.
 - The Inbox tab in the topbar shows how many captures are waiting,
   live as `inbox.md` changes, and turns green once the buffer passes
   the triage threshold. Hidden when the inbox is empty.
+- `eventRetentionDays` (default 90, `0` keeps everything): hook-event
+  day logs older than that are deleted at startup and daily. The log was
+  append-only and never pruned.
 
 ### Changed
 
@@ -23,12 +39,72 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   of the topbar into a floating panel over the graph's top-left corner,
   styled like the legend. The topbar is now just the wordmark, the
   panel tabs, and the live dot.
+- Tabs reordered around the agents: Brain, Agents, Flows, Stats, then
+  Projects, Inbox, Icons. On a narrow screen the tab strip scrolls
+  sideways instead of clipping. Escape closes the open note. The active
+  tab carries `aria-current`, and the icon-only buttons have labels.
+- Flows and Stats parse each day's event log once and reuse it until the
+  file changes, instead of re-reading the whole fortnight (about 8 MB on
+  a busy machine) on every request.
+- Flows lists sessions from the last 14 calendar days, the same window
+  Stats counts, rather than the last 14 day files: with gaps in the log
+  that reached back a month.
+- The live board forgets sessions nobody has heard from in 24 hours.
+  They stay in the day logs for Flows and Stats; before, the in-memory
+  map, and the snapshot broadcast on every hook event, grew for as long
+  as the server ran.
+
+### Removed
+
+- Crons (`#/crons`): the in-process scheduler for headless `claude -p`
+  runs, its `/api/crons*` endpoints, and the cron column on Stats. It was
+  the one endpoint that started a process, and its only real job — a
+  daily inbox count — is what the Inbox tab badge now shows live. Stats
+  reports one `sessions` count per day instead of the
+  `interactiveSessions`/`cronSessions` split; cron sessions in old logs
+  count as ordinary sessions. Leftover `data/crons.json` and
+  `data/cron-runs/` are no longer read and can be deleted by hand.
+- Ask-your-brain, and with it every LLM call: the ask box and its
+  conversation history, `/api/ask` and `/api/ask/history*`, the six
+  providers, the retrieval step for oversized vaults, and the `ai`
+  section of `config.json` (a leftover block is ignored, with a startup
+  warning). Orrerium now makes no outbound network calls at all. Stats
+  drops its ask rollup. A leftover `data/ask-conversations.json` can be
+  deleted by hand.
 
 ### Fixed
 
+- Inbox counting follows the capture skill's entry shape. Every comment
+  is stripped, not just the first. Headings of any level are skipped,
+  not just `# `. A fenced code block counts as part of the entry above
+  it, even when it contains blank lines.
+- `[[slug|alias]]` and `[[slug#heading]]` wikilinks render as links
+  showing their alias, and count as graph edges. Before, they showed as
+  literal text and linked nothing.
+- A malformed `Host` header, or a hook event whose `ts` lies past the
+  `Date` range, no longer crashes the server. Any request that throws
+  answers 500 instead. A `ts` that is invalid or more than a minute in
+  the future is replaced by the arrival time, so it can't name a day
+  file in 2100 that sorts into every "recent" window. A vault folder
+  vanishing mid-rebuild, or the watcher erroring, keeps the last good
+  graph instead of exiting. A file vanishing mid-download, or a request
+  target that is no URL at all, no longer reaches the crash path either.
+- POST bodies are decoded once, after the last chunk: a multi-byte
+  character (Hebrew, emoji) split across two chunks of a hook payload
+  came out as replacement characters.
 - The topbar wordmark now reads Orrerium; it still said BrainOS after the
   rename. The README hero is reshot to match, and its caption now covers
   the subagent rings and arrival flashes it shows.
+
+### Security
+
+- Every request passes a Host/Origin guard before routing: a loopback
+  listener only answers its own host names (no DNS rebinding), and
+  writes refuse any request a browser marks as coming from another site
+  (no cross-site POSTs). The hook relay and `curl` are unaffected.
+- Markdown renders raw HTML as text and drops `javascript:`-style
+  links. Notes include `.claude/*.md` files scanned from other repos,
+  and marked has no sanitizer.
 
 ## [0.4.0] - 2026-10-03
 
@@ -150,7 +226,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Zero-dependency Node server (`node server.js`), with `orrerium.bat` and
   `orrerium.sh` as double-click launchers.
 
-[Unreleased]: https://github.com/cfirz/Orrerium/compare/v0.4.0...HEAD
+[Unreleased]: https://github.com/cfirz/Orrerium/compare/v0.5.0...HEAD
+[0.5.0]: https://github.com/cfirz/Orrerium/compare/v0.4.0...v0.5.0
 [0.4.0]: https://github.com/cfirz/Orrerium/compare/v0.3.0...v0.4.0
 [0.3.0]: https://github.com/cfirz/Orrerium/compare/v0.2.0...v0.3.0
 [0.2.0]: https://github.com/cfirz/Orrerium/compare/v0.1.0...v0.2.0

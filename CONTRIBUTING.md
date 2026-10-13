@@ -45,8 +45,8 @@ linter, and no formatter config — match the surrounding code instead.
 - **Scope.** One concern per PR. A refactor folded into a fix makes both harder to review.
 - **Commits.** The log uses `Area: what changed` — `Flows: compress idle gaps`,
   `Docs: setup guide and troubleshooting`. Sentence case, no trailing period.
-- **Docs.** `README.md` is the canonical architecture doc; a change that alters
-  behaviour updates it in the same PR.
+- **Docs.** `README.md` covers using Orrerium and `docs/internals.md` how it works; a
+  change that alters behaviour updates them in the same PR.
 - **Screenshots.** UI changes are far easier to review with a before/after image.
 
 ## AI-assisted contributions

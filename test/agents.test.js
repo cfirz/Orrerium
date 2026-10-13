@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { mkdirSync, mkdtempSync, writeFileSync } from 'node:fs';
+import { mkdirSync, mkdtempSync, readdirSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
 import { applyEvent, classifySession, createAgentTracker, inFlightSubagents, sanitizeEvents } from '../lib/agents.js';
@@ -99,6 +99,29 @@ test('sanitizeEvents: foreign session ids are normalized to slug-safe form', () 
   assert.equal(one({ event: 'SessionStart', sessionId: 'y'.repeat(300) }, { source: 'my-tool' }).sessionId.length, 128);
 });
 
+test('sanitizeEvents: a ts that cannot name a sane day file falls back to now', () => {
+  const NOW = Date.UTC(2026, 9, 12, 12, 0, 0);
+  const tsOf = (ts) => one({ ts, event: 'SessionStart', sessionId: 'r' }, { source: 'my-tool', now: () => NOW }).ts;
+  assert.equal(tsOf(9e15), NOW); // past the Date range: toISOString() would throw
+  assert.equal(tsOf(Date.UTC(2100, 0, 1)), NOW); // would pin a 2100-01-01.ndjson as "recent" forever
+  assert.equal(tsOf(-1), NOW);
+  assert.equal(tsOf(Number.NaN), NOW);
+  assert.equal(tsOf('1755500000000'), NOW);
+  assert.equal(tsOf(undefined), NOW);
+  // past stamps are honest (a CI job reporting late); slight clock skew is tolerated
+  assert.equal(tsOf(NOW - 86_400_000), NOW - 86_400_000);
+  assert.equal(tsOf(NOW + 30_000), NOW + 30_000);
+});
+
+test('tracker: an absurd ts is logged under today instead of crashing', () => {
+  const dataDir = mkdtempSync(path.join(tmpdir(), 'orrerium-ts-'));
+  const NOW = Date.UTC(2026, 9, 12, 12, 0, 0);
+  const tracker = createAgentTracker({ dataDir, now: () => NOW });
+  tracker.record({ ts: 9e15, event: 'SessionStart', sessionId: 'r' }, 'my-tool');
+  assert.deepEqual(readdirSync(path.join(dataDir, 'agent-events')), ['2026-10-12.ndjson']);
+  rmSync(dataDir, { recursive: true, force: true });
+});
+
 test('applyEvent: full session lifecycle with parallel subagents', () => {
   const sessions = new Map();
   const feed = (event, extra, ts) => applyEvent(sessions, one(hookEvt(event, extra, ts)));
@@ -153,6 +176,22 @@ test('tracker: persists NDJSON, replays after restart, marks stale', () => {
   assert.equal(snap.sessions[0].stale, true);
 });
 
+test('tracker: sessions silent past the eviction window drop out of the snapshot', () => {
+  let clock = 1000;
+  const tracker = createAgentTracker({ evictMs: 10_000, now: () => clock });
+  tracker.record({ ts: 1000, event: 'SessionStart', sessionId: 'old' }, 'my-tool');
+  clock = 8000;
+  tracker.record({ ts: 8000, event: 'SessionStart', sessionId: 'new' }, 'my-tool');
+  assert.deepEqual(tracker.snapshot().sessions.map((s) => s.sessionId), ['new', 'old']);
+  clock = 12_000; // old is 11s quiet, new 4s
+  assert.deepEqual(tracker.snapshot().sessions.map((s) => s.sessionId), ['new']);
+  // a later event under the same id starts it afresh rather than resurrecting state
+  tracker.record({ ts: 12_000, event: 'PreToolUse', sessionId: 'old', tool: 'Read' }, 'my-tool');
+  const old = tracker.snapshot().sessions.find((s) => s.sessionId === 'old');
+  assert.equal(old.toolCount, 1);
+  assert.equal(old.sawStart, false);
+});
+
 test('classifySession separates work from app plumbing', () => {
   const sessions = new Map();
   const feed = (sid, event, extra = {}, ts = 1000) =>
@@ -171,11 +210,11 @@ test('classifySession separates work from app plumbing', () => {
   feed('fresh-sid', 'SessionStart', {}, 3000);
   assert.equal(classifySession(sessions.get('fresh-sid')), 'work');
 
-  // cron runs carry a synthetic prompt, so ending tool-less stays work
-  feed('cron-sid', 'SessionStart', {}, 4000);
-  feed('cron-sid', 'UserPromptSubmit', { prompt: '[cron X] do it' }, 4000);
-  feed('cron-sid', 'SessionEnd', {}, 5000);
-  assert.equal(classifySession(sessions.get('cron-sid')), 'work');
+  // a prompt answered without a tool call is still work, not plumbing
+  feed('chat-sid', 'SessionStart', {}, 4000);
+  feed('chat-sid', 'UserPromptSubmit', { prompt: 'what changed?' }, 4000);
+  feed('chat-sid', 'SessionEnd', {}, 5000);
+  assert.equal(classifySession(sessions.get('chat-sid')), 'work');
 
   // snapshot carries the kind
   const dataDir = mkdtempSync(path.join(tmpdir(), 'orrerium-agents-'));
